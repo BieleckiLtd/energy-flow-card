@@ -1,0 +1,16 @@
+# A throwaway Home Assistant for trying the card: docker compose -f test/ha/docker-compose.yml up -d
+# then open http://localhost:8123. Fake sensors are driven by the sliders on the "Card test" dashboard.
+services:
+  homeassistant:
+    image: ghcr.io/home-assistant/home-assistant:stable
+    container_name: energy-flow-card-ha
+    ports: ["8123:8123"]
+    volumes:
+      - ./config/configuration.yaml:/config/configuration.yaml:ro
+      - ./config/ui-lovelace.yaml:/config/ui-lovelace.yaml:ro
+      - ../../dist:/config/www/energy-flow-card:ro
+      - ha-data:/config
+    environment:
+      TZ: Europe/London
+volumes:
+  ha-data:

@@ -1,0 +1,5 @@
+node_modules/
+test/ha/config/.storage/
+*.log
+test/ha/login.local.yaml
+test/ha/token.local

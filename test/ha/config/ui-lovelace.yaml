@@ -1,0 +1,41 @@
+title: Card test
+views:
+  - title: Card
+    path: card
+    type: sections
+    max_columns: 3
+    sections:
+      - type: grid
+        cards:
+          - type: custom:energy-flow-card
+            weather: weather.test_weather
+            solar: sensor.solar_power
+            grid:
+              entity: sensor.grid_power
+            battery1:
+              power: sensor.battery_1_power
+              soc: sensor.battery_1_charge
+              invert: true
+              name: Garage
+            battery2:
+              charge: sensor.battery_2_charging
+              discharge: sensor.battery_2_discharging
+              soc: sensor.battery_2_charge
+      - type: grid
+        cards:
+          - type: entities
+            title: Fake meters
+            entities:
+              - input_number.solar_kw
+              - input_number.grid_w
+              - input_number.battery1_w
+              - input_number.battery1_soc
+              - input_number.battery2_charge_w
+              - input_number.battery2_discharge_w
+              - input_number.battery2_soc
+              - input_select.test_weather
+      - type: grid
+        cards:
+          - type: custom:energy-flow-card
+            title: Minimal (grid only)
+            grid: sensor.grid_power

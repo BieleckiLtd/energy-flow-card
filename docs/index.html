@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Energy Flow Card</title>
+  <meta name="description" content="An animated house for Home Assistant: solar, batteries, grid and home power under the real sky and weather. Try it here, then install it.">
+  <meta name="color-scheme" content="dark">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2317181a'/%3E%3Cpath d='M6 17 16 8l10 9v9H6z' fill='%23333'/%3E%3Cpath d='M9 16l7-6 4 3.4V20H9z' fill='%232d334d'/%3E%3Ccircle cx='24' cy='8' r='3' fill='%23d6a62c'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="lab.css?v=5476b19374">
+</head>
+<body>
+  <main class="lab">
+    <section class="stage" aria-label="Preview">
+      <energy-flow-card id="card"></energy-flow-card>
+    </section>
+
+    <div class="side">
+      <header class="top">
+        <h1>Energy Flow Card</h1>
+        <nav class="top-links">
+          <a href="#install" data-open="install">Install</a>
+          <a href="https://github.com/BieleckiLtd/energy-flow-card">GitHub</a>
+        </nav>
+      </header>
+      <div class="mode" role="radiogroup" aria-label="Mode">
+        <button type="button" role="radio" id="mode-demo">Demo</button>
+        <button type="button" role="radio" id="mode-try">Try it</button>
+      </div>
+      <div class="clock panel">
+        <select id="place" aria-label="Place"></select>
+        <div class="field-pair" id="custom-place" hidden>
+          <label class="field">Latitude<input id="latitude" type="number" min="-90" max="90" step="any"></label>
+          <label class="field">Longitude<input id="longitude" type="number" min="-180" max="180" step="any"></label>
+          <label class="field wide">Time zone<input id="zone" list="zones" autocomplete="off" spellcheck="false"></label>
+          <datalist id="zones"></datalist>
+        </div>
+        <div class="clock-row">
+          <input id="minute" type="range" min="0" max="1439" step="1" value="720" aria-label="Time of day">
+          <output id="clock" for="minute">12:00</output>
+        </div>
+        <div class="clock-row small">
+          <input id="date" type="date" aria-label="Date">
+          <button class="button ghost" id="now" type="button">Now</button>
+          <span id="sky-status" class="muted" role="status"></span>
+        </div>
+      </div>
+    <aside class="sidebar" aria-label="Lab controls">
+      <details open>
+        <summary>Weather</summary>
+        <div class="group">
+          <div class="chips" id="weather" role="group" aria-label="Weather"></div>
+        </div>
+      </details>
+
+      <details open>
+        <summary>Cases</summary>
+        <div class="group">
+          <div class="chips" id="cases"></div>
+          <p class="hint">Each case sets the power readings and the time of day.</p>
+        </div>
+      </details>
+
+      <details open>
+        <summary>Power</summary>
+        <div class="group" id="power"></div>
+      </details>
+
+      <details>
+        <summary>Parts</summary>
+        <div class="group" id="parts"></div>
+      </details>
+
+      <details id="install">
+        <summary>Get it for Home Assistant</summary>
+        <div class="group">
+          <ol class="steps">
+            <li><b>With HACS</b>: HACS → ⋮ → <i>Custom repositories</i> → add
+              <code>https://github.com/BieleckiLtd/energy-flow-card</code> as <i>Dashboard</i>, then download <i>Energy Flow Card</i>.</li>
+            <li><b>Or by hand</b>: <a href="energy-flow-card.js?v=06d264cfcc" download>download energy-flow-card.js</a>, put it in
+              <code>/config/www/</code> and add <code>/local/energy-flow-card.js</code> under
+              Settings → Dashboards → ⋮ → Resources as a <i>JavaScript module</i>.</li>
+            <li>Edit a dashboard → Add card → <i>Energy Flow Card</i>, or paste the YAML below into a Manual card.
+              It carries the names and colours set here; swap in your own sensors.</li>
+            <li><b>Weather</b>: the card follows a <code>weather.*</code> entity. Most installs already have
+              <code>weather.forecast_home</code> from Met.no (free, no API key); if not, add the <i>Met.no</i> integration
+              under Settings → Devices &amp; services.</li>
+          </ol>
+          <div class="yaml">
+            <pre id="yaml"></pre>
+            <button class="button primary" id="copy" type="button">Copy YAML</button>
+          </div>
+          <p class="hint">Signs: grid + is import, batteries + is discharging. A sensor the other way round takes
+            <code>invert: true</code>; separate import/export or charge/discharge sensors work too.</p>
+        </div>
+      </details>
+
+      <button class="button ghost reset-all" id="reset-all" type="button">Reset everything</button>
+    </aside>
+    </div>
+  </main>
+
+  <script src="energy-flow-card.js?v=06d264cfcc"></script>
+  <script src="lab.js?v=5dc118f300"></script>
+</body>
+</html>

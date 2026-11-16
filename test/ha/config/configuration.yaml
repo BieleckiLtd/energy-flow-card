@@ -1,0 +1,88 @@
+# Test setup for energy-flow-card: sliders stand in for real meters.
+default_config:
+
+homeassistant:
+  name: Card test
+  latitude: 51.5072
+  longitude: -0.1276
+  elevation: 10
+  unit_system: metric
+  time_zone: Europe/London
+  country: GB
+
+# Loads the card on every dashboard (resources: in YAML only work for a YAML-mode main dashboard).
+frontend:
+  extra_module_url:
+    - /local/energy-flow-card/energy-flow-card.js?v=dev
+
+lovelace:
+  mode: storage
+  dashboards:
+    card-test:
+      mode: yaml
+      title: Card test
+      icon: mdi:home-lightning-bolt
+      show_in_sidebar: true
+      filename: ui-lovelace.yaml
+
+input_number:
+  solar_kw: { name: Solar, min: 0, max: 10, step: 0.1, unit_of_measurement: kW }
+  grid_w: { name: Grid (+ import), min: -8000, max: 8000, step: 50, unit_of_measurement: W }
+  battery1_w: { name: Battery 1 (+ discharge), min: -5000, max: 5000, step: 50, unit_of_measurement: W }
+  battery1_soc: { name: Battery 1 charge, min: 0, max: 100, step: 1, unit_of_measurement: "%" }
+  battery2_charge_w: { name: Battery 2 charging, min: 0, max: 3000, step: 50, unit_of_measurement: W }
+  battery2_discharge_w: { name: Battery 2 discharging, min: 0, max: 3000, step: 50, unit_of_measurement: W }
+  battery2_soc: { name: Battery 2 charge, min: 0, max: 100, step: 1, unit_of_measurement: "%" }
+
+input_select:
+  test_weather:
+    name: Weather
+    options: [sunny, clear-night, partlycloudy, cloudy, fog, rainy, pouring, snowy, lightning-rainy]
+
+template:
+  - sensor:
+      - name: Solar power
+        unique_id: test_solar_power
+        unit_of_measurement: kW
+        device_class: power
+        state_class: measurement
+        state: "{{ states('input_number.solar_kw') | float(0) }}"
+      - name: Grid power
+        unique_id: test_grid_power
+        unit_of_measurement: W
+        device_class: power
+        state_class: measurement
+        state: "{{ states('input_number.grid_w') | float(0) }}"
+      - name: Battery 1 power
+        unique_id: test_battery1_power
+        unit_of_measurement: W
+        device_class: power
+        state_class: measurement
+        # Reported the other way round (+ charging), as some inverters do: the card config uses invert.
+        state: "{{ -(states('input_number.battery1_w') | float(0)) }}"
+      - name: Battery 1 charge
+        unique_id: test_battery1_soc
+        unit_of_measurement: "%"
+        device_class: battery
+        state: "{{ states('input_number.battery1_soc') | float(0) }}"
+      - name: Battery 2 charging
+        unique_id: test_battery2_charging
+        unit_of_measurement: W
+        device_class: power
+        state: "{{ states('input_number.battery2_charge_w') | float(0) }}"
+      - name: Battery 2 discharging
+        unique_id: test_battery2_discharging
+        unit_of_measurement: W
+        device_class: power
+        state: "{{ states('input_number.battery2_discharge_w') | float(0) }}"
+      - name: Battery 2 charge
+        unique_id: test_battery2_soc
+        unit_of_measurement: "%"
+        device_class: battery
+        state: "{{ states('input_number.battery2_soc') | float(0) }}"
+  - weather:
+      - name: Test weather
+        unique_id: test_weather
+        condition_template: "{{ states('input_select.test_weather') }}"
+        temperature_template: "{{ 12 }}"
+        humidity_template: "{{ 80 }}"
