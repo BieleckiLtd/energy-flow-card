@@ -8,6 +8,9 @@ const LANE_GAP = 19;  // between neighbouring lanes on the wall, in the picture'
 const MOON_RADIUS = 22;
 const HORIZON = -.27;  // the apparent centre is just below the horizon when the upper edge rises
 const GRID_FLOWS = ["grid", "grid2", "grid3"];
+const HOT = 30;  // °C: above this the air shimmers
+const FROST_START = 3;  // °C: frost begins to form here...
+const FROST_FULL = -10;  // ...and is fully grown here
 
 // The weather the picture can draw, and how much of the sky (sun, moon, twilight) shows through each.
 export const WEATHERS = ["clear", "partly", "cloudy", "fog", "drizzle", "rain", "heavy", "snow", "storm"];
@@ -310,7 +313,7 @@ export class EnergyFlowView {
 
   // Readings in watts: solar, home, grid (+ import, − export), battery1/battery2 { power (+ gives out, − charges), soc }.
   // weather is one of WEATHERS; sky is energySky()'s result, or null for a plain daytime sky; time (ms) is the moment
-  // shown, for the seasonal decorations.
+  // shown, for the seasonal decorations; temperature (°C) brings heat shimmer or frost.
   update(state) {
     const cfg = this.cfg, color = this.colors;
     const b1 = cfg.battery1.show ? state.battery1 || {} : {}, b2 = cfg.battery2.show ? state.battery2 || {} : {};
@@ -375,6 +378,7 @@ export class EnergyFlowView {
     const weather = WEATHERS.includes(state.weather) ? state.weather : "cloudy";
     this.attr(this.svg, "data-weather", PICTURE_WEATHER[weather]);
     this.updateSky(state.sky, weather);
+    this.temperature(state.temperature);
 
     if (this.svg.classList.contains("ef-still")) {
       this.svg.getBoundingClientRect();  // lays the lanes out where they are before transitions are switched on
@@ -383,8 +387,28 @@ export class EnergyFlowView {
     this.scheduleLabelContrast();
   }
 
+  // Air temperature in °C, or nothing. The shimmer grows a little stronger with the heat.
+  temperature(celsius) {
+    const hot = !missing(celsius) && celsius > HOT;
+    this.svg.classList.toggle("ef-hot", hot);
+    const frost = missing(celsius) ? 0 : Math.max(0, Math.min(1, (FROST_START - celsius) / (FROST_START - FROST_FULL)));
+    this.svg.classList.toggle("ef-frosty", frost > 0);
+    this.svg.style.setProperty("--ef-frost", frost.toFixed(2));
+    if (hot) this.attr(this.part("ef-heat-map"), "scale", Math.min(8, 3 + (celsius - HOT) * .4).toFixed(1));
+    this.syncShimmer();
+  }
+
+  // The shimmer's rise is the picture's one SMIL animation, which CSS cannot pause: it runs only while it shows.
+  syncShimmer() {
+    const run = this.svg.classList.contains("ef-hot") && !this.svg.classList.contains("ef-paused")
+      && !matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (run) this.svg.unpauseAnimations?.();
+    else this.svg.pauseAnimations?.();
+  }
+
   restWhenUnseen() {
     this.svg.classList.toggle("ef-paused", !this.seen || document.hidden);
+    this.syncShimmer();
     this.alignBeats();
     this.scheduleLabelContrast();
   }

@@ -50,6 +50,11 @@
         <summary>Weather</summary>
         <div class="group">
           <div class="chips" id="weather" role="group" aria-label="Weather"></div>
+          <div class="clock-row">
+            <input id="temperature" type="range" min="-10" max="40" step="1" value="15" aria-label="Temperature">
+            <output id="temperature-out" for="temperature">15 °C</output>
+          </div>
+          <p class="hint">Above 30 °C the air shimmers; below 3 °C frost grows, fully at −10 °C.</p>
         </div>
       </details>
 
@@ -77,7 +82,7 @@
           <ol class="steps">
             <li><b>With HACS</b>: HACS → ⋮ → <i>Custom repositories</i> → add
               <code>https://github.com/BieleckiLtd/energy-flow-card</code> as <i>Dashboard</i>, then download <i>Energy Flow Card</i>.</li>
-            <li><b>Or by hand</b>: <a href="energy-flow-card.js?v=72cb207924" download>download energy-flow-card.js</a>, put it in
+            <li><b>Or by hand</b>: <a href="energy-flow-card.js?v=b7ef4e07a6" download>download energy-flow-card.js</a>, put it in
               <code>/config/www/</code> and add <code>/local/energy-flow-card.js</code> under
               Settings → Dashboards → ⋮ → Resources as a <i>JavaScript module</i>.</li>
             <li>Edit a dashboard → Add card → <i>Energy Flow Card</i>, or paste the YAML below into a Manual card.
@@ -100,7 +105,7 @@
     </div>
   </main>
 
-  <script src="energy-flow-card.js?v=72cb207924"></script>
-  <script src="lab.js?v=5dc118f300"></script>
+  <script src="energy-flow-card.js?v=b7ef4e07a6"></script>
+  <script src="lab.js?v=073f90867c"></script>
 </body>
 </html>

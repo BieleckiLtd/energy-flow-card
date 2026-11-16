@@ -32,22 +32,22 @@
 
   const state = {
     place: "london", latitude: 51.5072, longitude: -0.1276, zone: "Europe/London",
-    date: today(), minute: 720, weather: "clear",
+    date: today(), minute: 720, weather: "clear", temperature: 15,
     power: { solar: 2.2, b1: 0, b2: 0, grid: 0, home: 2.2, b1soc: 64, b2soc: 48 }, balance: true,
     config: clone(DEFAULT_CONFIG),
   };
   try {
     const saved = JSON.parse(localStorage.getItem(STORE) || "null");
     if (saved) {
-      for (const k of ["place", "latitude", "longitude", "zone", "weather", "balance"]) if (k in saved) state[k] = saved[k];
+      for (const k of ["place", "latitude", "longitude", "zone", "weather", "temperature", "balance"]) if (k in saved) state[k] = saved[k];
       Object.assign(state.power, saved.power || {});
       for (const part of Object.keys(DEFAULT_CONFIG)) Object.assign(state.config[part], saved.config?.[part] || {});
     }
   } catch { /* a private window: start fresh */ }
   const save = () => {
     try {
-      const { place, latitude, longitude, zone, weather, balance, power, config } = state;
-      localStorage.setItem(STORE, JSON.stringify({ place, latitude, longitude, zone, weather, balance, power, config }));
+      const { place, latitude, longitude, zone, weather, temperature, balance, power, config } = state;
+      localStorage.setItem(STORE, JSON.stringify({ place, latitude, longitude, zone, weather, temperature, balance, power, config }));
     } catch { /* not kept, still works */ }
   };
 
@@ -128,9 +128,11 @@
     card.preview({
       solar: w(p.solar), home: w(p.home), grid: w(p.grid),
       battery1: { power: w(p.b1), soc: p.b1soc }, battery2: { power: w(p.b2), soc: p.b2soc },
-      weather: state.weather, sky, time: instant,
+      weather: state.weather, temperature: state.temperature, sky, time: instant,
     });
     for (const b of $("weather").children) b.setAttribute("aria-pressed", b.dataset.key === state.weather);
+    $("temperature").value = state.temperature;
+    $("temperature-out").textContent = `${state.temperature} °C`;
     syncPower();
     $("yaml").textContent = yaml();
     if (!show.timer) save();
@@ -193,6 +195,7 @@
     b.onclick = () => { state.weather = key; render(); };
     $("weather").append(b);
   }
+  $("temperature").addEventListener("input", () => { state.temperature = +$("temperature").value; render(); });
 
   $("date").value = state.date;
   $("date").addEventListener("change", () => {
@@ -217,7 +220,7 @@
   const SHOWCASE = [
     {
       title: "Out of the box", note: "summer afternoon, solar charging both batteries and exporting",
-      config: DEFAULT_CONFIG, date: "2026-06-21", clock: [14, 0], weather: "clear",
+      config: DEFAULT_CONFIG, date: "2026-06-21", clock: [14, 0], weather: "clear", temperature: 24,
       power: { solar: 5.8, b1: -2.4, b2: -1.0, grid: -1.7, home: 0.7, b1soc: 72, b2soc: 85 },
     },
     {
@@ -228,7 +231,7 @@
         battery1: { show: true, name: "Battery 1", color: "#3fa796", face: "#3a3d42" },
         battery2: { show: true, name: "Battery 2", color: "#5b8def", face: "#c9ccd1" },
       },
-      date: "2026-01-23", clock: [17, 30], weather: "snow",
+      date: "2026-01-23", clock: [17, 30], weather: "snow", temperature: -3,
       power: { solar: 0, b1: 1.6, b2: 0.6, grid: 0.4, home: 2.6, b1soc: 58, b2soc: 41 },
     },
     {
@@ -238,7 +241,7 @@
         battery1: { show: true, name: "Battery 1", color: "#4f9fe0", face: "#d9dde2" },
         battery2: { ...DEFAULT_CONFIG.battery2, show: false },
       },
-      date: "2026-10-24", clock: [2, 30], weather: "rain",
+      date: "2026-10-24", clock: [2, 30], weather: "rain", temperature: 9,
       power: { solar: 0, b1: -3.0, b2: 0, grid: 3.4, home: 0.4, b1soc: 34, b2soc: 0 },
     },
   ];
@@ -254,6 +257,7 @@
     state.date = scene.date;
     $("date").value = state.date;
     state.weather = scene.weather;
+    state.temperature = scene.temperature;
     Object.assign(state.power, scene.power);
     state.balance = false;
     setClock(...scene.clock);
@@ -262,8 +266,8 @@
 
   function startShowcase() {
     if (show.timer) return;
-    const { place, latitude, longitude, zone, date, minute, weather, balance, power } = state;
-    show.saved = clone({ place, latitude, longitude, zone, date, minute, weather, balance, power });
+    const { place, latitude, longitude, zone, date, minute, weather, temperature, balance, power } = state;
+    show.saved = clone({ place, latitude, longitude, zone, date, minute, weather, temperature, balance, power });
     Object.assign(state, { place: "london", latitude: 51.5072, longitude: -0.1276, zone: "Europe/London" });
     showScene(0);
     show.timer = setInterval(() => showScene(show.index + 1), SHOW_FOR);

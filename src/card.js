@@ -15,7 +15,7 @@ const PARTS = ["solar", "home", "grid", "battery1", "battery2"];
 
 // The config as written (YAML or the editor) -> every option filled in. A part given as a plain string is its entity.
 export function normalizeConfig(config = {}) {
-  const out = { title: config.title || "", weather: config.weather || "", latitude: config.latitude, longitude: config.longitude,
+  const out = { title: config.title || "", weather: config.weather || "", temperature: config.temperature || "", latitude: config.latitude, longitude: config.longitude,
     christmas: config.christmas !== false };
   for (const key of PARTS) {
     let c = config[key];
@@ -166,8 +166,25 @@ export class EnergyFlowCard extends HTMLElement {
       battery2: { power: this.signed(cfg.battery2, "power", "discharge", "charge"), soc: this.number(cfg.battery2.soc) },
       weather: HA_WEATHER[weatherState] || (cfg.weather ? "cloudy" : "clear"),
       sky: Number.isFinite(latitude) && Number.isFinite(longitude) ? energySky(latitude, longitude, Date.now()) : null,
+      temperature: this.celsius(),
       time: Date.now(),
     };
+  }
+
+  // A temperature sensor if one is set, else the weather entity's own temperature; °F is converted.
+  celsius() {
+    const cfg = this.config, hass = this._hass;
+    let value, unit;
+    if (cfg.temperature) {
+      value = this.number(cfg.temperature);
+      unit = hass.states[cfg.temperature]?.attributes?.unit_of_measurement;
+    } else {
+      const attrs = cfg.weather && hass.states[cfg.weather]?.attributes;
+      value = attrs ? parseFloat(attrs.temperature) : NaN;
+      unit = attrs?.temperature_unit ?? hass.config?.unit_system?.temperature;
+    }
+    if (!Number.isFinite(value)) return null;
+    return /F/i.test(unit || "") ? (value - 32) * 5 / 9 : value;
   }
 
   render() {
@@ -187,6 +204,7 @@ export class EnergyFlowCard extends HTMLElement {
       schema: [
         { name: "title", selector: text },
         { name: "weather", selector: { entity: { domain: "weather" } } },
+        { name: "temperature", selector: { entity: { domain: "sensor", device_class: "temperature" } } },
         { name: "christmas", selector: { boolean: {} } },
         { type: "expandable", name: "solar", title: "Solar", schema: [
           { name: "entity", selector: power }, { name: "name", selector: text }, color("color"),
@@ -230,13 +248,14 @@ export class EnergyFlowCard extends HTMLElement {
 }
 
 const LABELS = {
-  title: "Title", weather: "Weather entity", christmas: "Christmas decorations (6 December to 6 January)", entity: "Power sensor", import: "Import sensor (instead of one signed sensor)",
+  title: "Title", weather: "Weather entity", temperature: "Outdoor temperature sensor (optional)", christmas: "Christmas decorations (6 December to 6 January)", entity: "Power sensor", import: "Import sensor (instead of one signed sensor)",
   export: "Export sensor", invert: "Flip the sign", name: "Name", color: "Flow colour (#rrggbb)", show: "Show in picture",
   power: "Power sensor", soc: "Charge (%) sensor", discharge: "Discharge sensor (instead of one signed sensor)",
   charge: "Charge sensor", face: "Front colour (#rrggbb)", glass: "Solar glass", roof: "Roof", wall: "Wall",
   window: "Window", background: "Background",
 };
 const HELPERS = {
+  temperature: "Above 30 °C the air shimmers; below 3 °C frost grows, fully at -10 °C. Without a sensor the weather entity's temperature is used.",
   invert: "Grid: + is import. Batteries: + is discharging. Turn on if your sensor uses the other sign.",
 };
 
