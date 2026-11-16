@@ -7,7 +7,11 @@ pulses running along the pipes, the sun and moon where they really are for your 
 **[Live demo](https://bieleckiltd.github.io/energy-flow-card/)**: pick a place, date, time and weather, play the
 built-in cases, rename parts, change colours, hide a battery, then copy the YAML.
 
-[![Energy Flow Card in Home Assistant: solar, two batteries, home and grid at dusk](https://raw.githubusercontent.com/BieleckiLtd/energy-flow-card/main/assets/screenshot.webp)](https://bieleckiltd.github.io/energy-flow-card/)
+<a href="https://bieleckiltd.github.io/energy-flow-card/"><img src="https://raw.githubusercontent.com/BieleckiLtd/energy-flow-card/main/assets/screenshot.webp" width="486" alt="Energy Flow Card in Home Assistant: solar, two batteries, home and grid at dusk"></a>
+
+[![Buy me a coffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-635BFF?style=for-the-badge&logo=stripe&logoColor=white)](https://buy.stripe.com/7sY00k9G4f1geDHe5Y8Ra00)
+
+If you enjoy Energy Flow Card, buying me a coffee helps support its development. The button opens **Stripe** checkout.
 
 ## Install
 
