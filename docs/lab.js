@@ -422,8 +422,8 @@
   function buildParts() {
     const box = $("parts");
     box.replaceChildren();
-    const PARTS = [["solar", "Solar", true, ["color", "Flow"]], ["battery1", "Battery 1", true, ["color", "Flow"], ["face", "Front"]],
-      ["battery2", "Battery 2", true, ["color", "Flow"], ["face", "Front"]], ["grid", "Grid", false, ["color", "Flow"]], ["home", "Home", false]];
+    const PARTS = [["solar", "Solar", true, ["color", "Flow"]], ["battery1", "Battery 1", true, ["color", "Flow"], ["face", "Glass"]],
+      ["battery2", "Battery 2", true, ["color", "Flow"], ["face", "Glass"]], ["grid", "Grid", false, ["color", "Flow"]], ["home", "Home", false]];
     for (const [key, title, optional, ...colors] of PARTS) {
       const part = state.config[key];
       const el = document.createElement("div");
@@ -492,8 +492,11 @@
     if (c.solar.show) block("solar", [["entity", "sensor.solar_power"]]);
     block("grid", [["entity", "sensor.grid_power"]]);
     block("home", [["entity", "sensor.home_power"]]);
-    if (c.battery1.show) block("battery1", [["power", "sensor.battery_1_power"], ["soc", "sensor.battery_1_charge"]]);
-    if (c.battery2.show) block("battery2", [["power", "sensor.battery_2_power"], ["soc", "sensor.battery_2_charge"]]);
+    // Batteries are on by default, so one switched off is written out.
+    for (const n of [1, 2]) {
+      if (c[`battery${n}`].show) block(`battery${n}`, [["power", `sensor.battery_${n}_power`], ["soc", `sensor.battery_${n}_charge`]]);
+      else lines.push(`battery${n}: false`);
+    }
     return lines.join("\n") + "\n";
   }
   $("copy").addEventListener("click", async () => {

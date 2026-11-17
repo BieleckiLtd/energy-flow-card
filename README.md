@@ -38,11 +38,12 @@ battery1:
   soc: sensor.battery_level
   name: Garage
   color: "#4dbd80"                     # flow colour
-  face: "#eeeeee"                      # front colour
+  face: "#eeeeee"                      # glass cover colour, any #rrggbb
 battery2:
   charge: sensor.battery2_charging     # two always-positive sensors work as well
   discharge: sensor.battery2_discharging
   soc: sensor.battery2_level
+# battery2: false                      # only one battery: its label and the grid's are then centred
 ```
 
 | Option | For | Meaning |
@@ -54,8 +55,8 @@ battery2:
 | `invert` | grid, batteries | Flip the sign if your sensor counts the other way |
 | `name` | any part | Label in the picture |
 | `color` | solar, grid, batteries | Flow colour, `#rrggbb` |
-| `face` | batteries | Front colour, `#rrggbb` |
-| `show` | solar, batteries | `false` hides the part (a battery without sensors is hidden anyway) |
+| `face` (or `glass`) | batteries | Colour of the glass cover, any `#rrggbb` |
+| `show` | solar, batteries | Batteries are on by default; `show: false` (or `battery2: false`) takes one out, and the labels left in the bottom row centre on their leaders. Solar shows once it has a sensor |
 | `weather` | card | A `weather.*` entity; without one the sky is clear |
 | `temperature` | card | Optional outdoor temperature sensor; without one the weather entity's temperature is used |
 | `latitude`, `longitude` | card | Sky location, if not Home Assistant's own |

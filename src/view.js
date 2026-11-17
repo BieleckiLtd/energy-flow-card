@@ -881,6 +881,7 @@ export class EnergyFlowView {
     svg.classList.toggle("ef-no-solar", !cfg.solar.show);
     svg.classList.toggle("ef-no-b1", !cfg.battery1.show);
     svg.classList.toggle("ef-no-b2", !cfg.battery2.show);
+    this.placeLabels(cfg.battery1.show && cfg.battery2.show);
     const name = (id, value) => this.text(id, String(value ?? "").toUpperCase(), null);
     name("ef-solar-name", cfg.solar.name);
     name("ef-home-name", cfg.home.name);
@@ -898,6 +899,18 @@ export class EnergyFlowView {
     this.applyEffects();
     this.shimmer?.invalidate();
     this.scheduleLabelContrast();
+  }
+
+  // Two batteries share the bottom row: battery 1 right of its leader, battery 2 and the grid left of theirs.
+  // With one battery (or none) there is room, so each label is centred on its leader, as solar and home are.
+  placeLabels(both) {
+    this.labelPlaces ??= [...this.svg.querySelectorAll("#ef-b1-label text, #ef-b2-label text, #ef-grid-name, #ef-grid")]
+      .map((el) => ({ el, x: el.getAttribute("x"), anchor: el.getAttribute("text-anchor") || "start",
+        centre: el.closest("#ef-b1-label") ? 388 : el.closest("#ef-b2-label") ? 495 : 895 }));
+    for (const { el, x, anchor, centre } of this.labelPlaces) {
+      this.attr(el, "x", both ? x : centre);
+      this.attr(el, "text-anchor", both ? anchor : "middle");
+    }
   }
 
   applyEffects() {

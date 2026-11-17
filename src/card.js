@@ -22,11 +22,14 @@ export function normalizeConfig(config = {}) {
     if (typeof c === "string") c = { entity: c };
     if (c === false) c = { show: false };
     c = { ...(c || {}) };
+    if (key.startsWith("battery") && c.glass && !c.face) c.face = c.glass;  // the battery's glass front
+    delete c.glass;
     const part = { ...DEFAULTS[key], ...c };
     for (const k of ["color", "face"]) if (part[k] && !validColor(part[k])) part[k] = DEFAULTS[key][k];
     if ("show" in DEFAULTS[key]) {
+      // Batteries are on unless switched off; solar shows once it has a sensor.
       const hasEntity = !!(c.entity || c.power || c.soc || c.charge || c.discharge);
-      part.show = c.show ?? (config.preview ? true : hasEntity);
+      part.show = c.show ?? (config.preview || key.startsWith("battery") ? true : hasEntity);
     }
     out[key] = part;
   }
@@ -218,10 +221,10 @@ export class EnergyFlowCard extends HTMLElement {
         { type: "expandable", name: "home", title: "Home", schema: [
           { name: "entity", selector: power }, { name: "name", selector: text }] },
         ...[1, 2].map((n) => ({ type: "expandable", name: `battery${n}`, title: `Battery ${n}`, schema: [
-          { name: "power", selector: power }, { name: "soc", selector: power },
+          { name: "show", selector: { boolean: {} } }, { name: "power", selector: power }, { name: "soc", selector: power },
           { name: "discharge", selector: power }, { name: "charge", selector: power },
           { name: "invert", selector: { boolean: {} } }, { name: "name", selector: text },
-          color("color"), color("face"), { name: "show", selector: { boolean: {} } }] })),
+          color("color"), color("face")] })),
         { type: "expandable", name: "look", title: "House colours", schema: [
           color("glass"), color("roof"), color("wall"), color("window"), color("background")] },
       ],
@@ -239,7 +242,8 @@ export class EnergyFlowCard extends HTMLElement {
     const weather = Object.keys(hass?.states || {}).find((id) => id.startsWith("weather.")) || "";
     // Only what was found goes in, so a new card's YAML has no empty entries. christmas stays: the editor shows a
     // missing switch as off.
-    const config = { christmas: true };
+    // Both batteries are on by default; written out so the editor's switches show it.
+    const config = { christmas: true, battery1: { show: true }, battery2: { show: true } };
     if (weather) config.weather = weather;
     for (const [part, key, id] of [["solar", "entity", find("solar", "pv")], ["grid", "entity", find("grid")],
       ["home", "entity", find("home", "house", "load", "consumption")], ["battery1", "power", find("battery")],
@@ -254,7 +258,7 @@ const LABELS = {
   title: "Title", weather: "Weather entity", temperature: "Outdoor temperature sensor (optional)", christmas: "Christmas decorations (6 December to 6 January)", effects: "Detail", entity: "Power sensor", import: "Import sensor (instead of one signed sensor)",
   export: "Export sensor", invert: "Flip the sign", name: "Name", color: "Flow colour (#rrggbb)", show: "Show in picture",
   power: "Power sensor", soc: "Charge (%) sensor", discharge: "Discharge sensor (instead of one signed sensor)",
-  charge: "Charge sensor", face: "Front colour (#rrggbb)", glass: "Solar glass", roof: "Roof", wall: "Wall",
+  charge: "Charge sensor", face: "Glass cover colour (#rrggbb, any colour)", glass: "Solar glass", roof: "Roof", wall: "Wall",
   window: "Window", background: "Background",
 };
 const HELPERS = {
