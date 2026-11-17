@@ -554,9 +554,19 @@ class PulseRenderer {
   // After each reading: which pieces run, which way, in what colour, on which beat.
   update() {
     if (this.failed) return;
-    const view = this.view, cd = view.cycleDistance;
+    const view = this.view, cd = view.cycleDistance, svg = this.svg;
+    // Computed styles are read only for pieces whose flow, colours or lane changed: after the readings went in,
+    // the first such read makes the browser restyle the whole picture, which on a tablet took ~350 ms every poll
+    // and stalled the animation.
+    const shared = [cd, [...svg.classList].filter((c) => !TRANSIENT.has(c)).join(" "),
+      view.colorKeys.map((k) => svg.style.getPropertyValue(k)).join()].join("|");
+    let changed = !this.canvas.isConnected;
     for (const piece of this.pieces) {
       const flow = piece.flow, way = flow.dataset.flow;
+      const key = [shared, way, flow.getAttribute("style"), piece.line?.getAttribute("class"), piece.line?.getAttribute("style")].join("|");
+      if (key === piece.key) continue;
+      piece.key = key;
+      changed = true;
       let shown = way !== "off" && !!cd;
       for (let el = piece.group; shown && el && el !== this.svg; el = el.parentNode) if (getComputedStyle(el).display === "none") shown = false;
       piece.shown = shown;
@@ -578,7 +588,7 @@ class PulseRenderer {
       this.svg.after(this.canvas);  // over the picture
       this.resizer?.observe(this.svg);
     }
-    this.place();
+    if (changed) this.place();
     this.scheduleMasks();
     this.sync();
   }
