@@ -225,6 +225,13 @@ void main(){
   gl_FragColor=mix(texture2D(u_a,uv),texture2D(u_b,uv),u_mix);
 }`;
 const SHIMMER_FADE = 600;  // ms to cross-fade a new snapshot in
+// Rasterizing the picture holds up the page for a moment, which shows as a hitch in every animation. The sky
+// background is sampled again only when the look changes (weather, night, decorations, colours) or after this long
+// (ms): the sun, the light and the clouds move slowly enough.
+const RESAMPLE = 60000;
+const TRANSIENT = new Set(["ef-paused", "ef-baked", "ef-still", "ef-restart"]);
+const lookKey = (svg) => [...svg.classList].filter((c) => !TRANSIENT.has(c)).join(" ")
+  + "|" + svg.getAttribute("data-weather") + "|" + svg.getAttribute("data-time");
 
 class HeatShimmer {
   constructor(svg) {
@@ -358,6 +365,7 @@ class HeatShimmer {
   // A new snapshot, once things settle, if the still parts look any different.
   refresh() {
     if (this.failed || !this.canvas.width) return;
+    if (this.markup && this.key === lookKey(this.svg) && performance.now() - this.snapAt < RESAMPLE) return;
     this.dirty = true;
     if (this.busy || (this.shown && !this.running())) return;
     this.busy = true;
@@ -365,16 +373,23 @@ class HeatShimmer {
       try {
         while (this.dirty && !this.failed && this.svg.classList.contains("ef-hot")) {
           this.dirty = false;
+          const key = lookKey(this.svg);
           const markup = this.stillMarkup();
-          if (markup === this.markup) continue;
+          if (markup === this.markup) { this.key = key; this.snapAt = performance.now(); continue; }
           const url = URL.createObjectURL(new Blob([markup], { type: "image/svg+xml" }));
           try {
             const image = new Image();
             image.src = url;
             await image.decode();
+            // drawn into a bitmap away from the frame being shown, where the browser can; the upload is then quick
+            let source = image;
+            if (typeof createImageBitmap === "function") source = await createImageBitmap(image).catch(() => image);
             if (this.failed || !this.svg.classList.contains("ef-hot")) break;
-            this.upload(image);
+            this.upload(source);
+            source.close?.();
             this.markup = markup;
+            this.key = key;
+            this.snapAt = performance.now();
           } finally {
             URL.revokeObjectURL(url);
           }
@@ -386,6 +401,9 @@ class HeatShimmer {
       }
     }, 250);
   }
+
+  // Snapshot again on the next update, e.g. after new colours.
+  invalidate() { this.markup = null; }
 
   upload(image) {
     const gl = this.gl;
@@ -512,6 +530,8 @@ class EnergyFlowView {
     this.colors = {
       solar: cfg.solar.color, grid: cfg.grid.color, b1: cfg.battery1.color, b2: cfg.battery2.color,
     };
+    this.contrastKey = null;
+    this.shimmer?.invalidate();
     this.scheduleLabelContrast();
   }
 
@@ -785,7 +805,7 @@ class EnergyFlowView {
 
   async sampleLabelContrast() {
     // Rasterize the background locally at a small size, with the labels removed from the sample.
-    const svg = this.svg;
+    const svg = this.svg, key = lookKey(svg);
     const scene = svg.cloneNode(true);
     scene.querySelector("#ef-labels").remove();
     scene.classList.remove("ef-baked");  // the still parts the shimmer canvas draws are background too
@@ -811,6 +831,8 @@ class EnergyFlowView {
       for (const label of this.part("ef-labels").querySelectorAll("text")) {
         if (label.getClientRects().length) this.adaptLabel(label, context, scale);
       }
+      this.contrastKey = key;
+      this.contrastAt = performance.now();
     } finally {
       URL.revokeObjectURL(url);
     }
@@ -818,6 +840,7 @@ class EnergyFlowView {
 
   scheduleLabelContrast() {
     if (!this.canSampleContrast()) return;
+    if (this.contrastKey === lookKey(this.svg) && performance.now() - this.contrastAt < RESAMPLE) return;
     this.contrastDirty = true;
     if (this.contrastBusy) return;
     this.contrastBusy = true;
