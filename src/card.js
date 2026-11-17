@@ -1,7 +1,7 @@
 // The Home Assistant card: <energy-flow-card>, a Lovelace custom card. It reads power sensors, a weather entity
 // and Home Assistant's location, and draws them with EnergyFlowView. The lab page drives the same element
 // through preview(), without Home Assistant.
-import { EnergyFlowView, DEFAULTS, EFFECTS, WEATHERS, validColor } from "./view.js";
+import { EnergyFlowView, DEFAULTS, WEATHERS, effectsLevel, validColor } from "./view.js";
 import { energySky } from "./sky.js";
 import { SVG, VERSION } from "./svg.js";
 
@@ -16,7 +16,7 @@ const PARTS = ["solar", "home", "grid", "battery1", "battery2"];
 // The config as written (YAML or the editor) -> every option filled in. A part given as a plain string is its entity.
 export function normalizeConfig(config = {}) {
   const out = { title: config.title || "", weather: config.weather || "", temperature: config.temperature || "", latitude: config.latitude, longitude: config.longitude,
-    christmas: config.christmas !== false, effects: EFFECTS.includes(config.effects) ? config.effects : "auto" };
+    christmas: config.christmas !== false, effects: effectsLevel(config.effects) };
   for (const key of PARTS) {
     let c = config[key];
     if (typeof c === "string") c = { entity: c };
@@ -207,8 +207,8 @@ export class EnergyFlowCard extends HTMLElement {
         { name: "temperature", selector: { entity: { domain: "sensor", device_class: "temperature" } } },
         { name: "christmas", selector: { boolean: {} } },
         { name: "effects", selector: { select: { mode: "dropdown", options: [
-          { value: "auto", label: "Auto: lighter on devices that struggle" }, { value: "full", label: "Always full" },
-          { value: "reduced", label: "Always reduced" }] } } },
+          { value: "auto", label: "Auto: asks on devices that struggle" }, { value: "high", label: "High" },
+          { value: "medium", label: "Medium" }, { value: "low", label: "Low" }] } } },
         { type: "expandable", name: "solar", title: "Solar", schema: [
           { name: "entity", selector: power }, { name: "name", selector: text }, color("color"),
           { name: "show", selector: { boolean: {} } }] },
@@ -251,7 +251,7 @@ export class EnergyFlowCard extends HTMLElement {
 }
 
 const LABELS = {
-  title: "Title", weather: "Weather entity", temperature: "Outdoor temperature sensor (optional)", christmas: "Christmas decorations (6 December to 6 January)", effects: "Effects", entity: "Power sensor", import: "Import sensor (instead of one signed sensor)",
+  title: "Title", weather: "Weather entity", temperature: "Outdoor temperature sensor (optional)", christmas: "Christmas decorations (6 December to 6 January)", effects: "Detail", entity: "Power sensor", import: "Import sensor (instead of one signed sensor)",
   export: "Export sensor", invert: "Flip the sign", name: "Name", color: "Flow colour (#rrggbb)", show: "Show in picture",
   power: "Power sensor", soc: "Charge (%) sensor", discharge: "Discharge sensor (instead of one signed sensor)",
   charge: "Charge sensor", face: "Front colour (#rrggbb)", glass: "Solar glass", roof: "Roof", wall: "Wall",
@@ -259,7 +259,7 @@ const LABELS = {
 };
 const HELPERS = {
   temperature: "Above 30 °C the air shimmers; below 3 °C frost grows, fully at -10 °C. Without a sensor the weather entity's temperature is used.",
-  effects: "Reduced: half the rain and snow, no heat shimmer, pulses drawn at lower resolution. Auto watches the animation for a minute and offers this where it is choppy.",
+  effects: "Medium: slightly softer pulses, half the rain and snow. Low: soft pulses, a quarter of the rain and snow, no heat haze. Auto watches the animation and asks on a device where it is choppy; the answer is kept on that device.",
   invert: "Grid: + is import. Batteries: + is discharging. Turn on if your sensor uses the other sign.",
 };
 

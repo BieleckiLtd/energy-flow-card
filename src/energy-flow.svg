@@ -121,8 +121,11 @@
 .ef[data-weather=clear] #ef-stars{opacity:var(--ef-starlight,0)}
 .ef[data-weather=rain] #ef-rain,.ef[data-weather=drizzle] #ef-rain,.ef[data-weather=heavy] #ef-rain,.ef[data-weather=heavy] #ef-heavy,.ef[data-weather=storm] #ef-rain,.ef[data-weather=storm] #ef-heavy,.ef[data-weather=storm] #ef-flash{display:inline}
 .ef[data-weather=snow] #ef-snow{display:inline}
-/* Reduced effects (chosen on a slow device): half the rain, ripples and snow. */
+/* Less detail, chosen on a slow device. Medium: half the rain, ripples and snow. Low: a quarter of the rain and snow,
+   no ripples, still fog and stars. */
 .ef-lite .ef-streaks path:nth-child(2n),.ef-lite #ef-ripples ellipse:nth-child(2n),.ef-lite #ef-snow circle:nth-child(2n){display:none}
+.ef-low .ef-streaks path:nth-child(4n+3),.ef-low #ef-ripples,.ef-low #ef-snow circle:nth-child(4n+3){display:none}
+.ef-low #ef-fog ellipse,.ef.ef-low[data-weather][data-time] #ef-stars circle{animation:none}
 .ef[data-weather=drizzle] .ef-streaks path:nth-child(2n),.ef[data-weather=drizzle] #ef-ripples ellipse:nth-child(2n){display:none}
 #ef-drift{animation:ef-drift 150s linear infinite}
 #ef-fog ellipse{animation:ef-sway 46s ease-in-out infinite alternate}

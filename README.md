@@ -61,7 +61,7 @@ battery2:
 | `latitude`, `longitude` | card | Sky location, if not Home Assistant's own |
 | `title` | card | Optional heading |
 | `christmas` | card | Tree in the window and lights under the eaves from 6 December to 6 January; `false` turns them off (on by default) |
-| `effects` | card | `auto` (default): if the animation is choppy for a minute, pulses and shimmer draw at a lower resolution, and if that is not enough the card offers to reduce effects (half the rain and snow, no heat shimmer); the answer is remembered on that device. `full` or `reduced` fixes it for every device |
+| `effects` | card | Level of detail: `auto` (default), `high`, `medium` or `low`. Medium: slightly softer pulses, half the rain and snow. Low: soft pulses, a quarter of the rain and snow, no heat haze. With `auto`, after a minute of choppy animation the pulses quietly draw at a lower resolution; if it is still choppy the card asks which level to use, trying each out as it is picked, and keeps the answer on that device |
 | `look` | card | `glass`, `roof`, `wall`, `window`, `background` colours |
 
 Tap a label to open that sensor's details.

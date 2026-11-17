@@ -712,11 +712,18 @@ class PulseRenderer {
   }
 }
 
-// Effects. With "auto" the view watches how evenly the picture moves while it is on screen. Where frames keep
+// Detail. With "auto" the view watches how evenly the picture moves while it is on screen. Where frames keep
 // dropping, the GPU canvases first draw at a lower density (hard to see on a sharp screen); if that is not enough,
-// the card offers to reduce the effects (half the rain and snow, no heat shimmer, canvases at one pixel per CSS
-// pixel). The lower density and the viewer's answer are remembered on the device. "full" and "reduced" fix it.
-export const EFFECTS = ["auto", "full", "reduced"];
+// the card asks which level of detail to use, trying each one out as it is picked. The lower density and the
+// answer are remembered on the device. "high", "medium" and "low" fix the level for every device.
+export const EFFECTS = ["auto", "high", "medium", "low"];
+const LEVELS = {
+  high: { cap: Infinity, shimmer: true, label: "High", about: "Everything, as sharp as the screen allows" },
+  medium: { cap: 1.5, shimmer: true, label: "Medium", about: "Slightly softer pulses, half the rain and snow" },
+  low: { cap: 1, shimmer: false, label: "Low", about: "Softer pulses, little rain or snow, no heat haze" },
+};
+const OLD_EFFECTS = { full: "high", reduced: "low" };  // the names in 0.4.0
+export const effectsLevel = (value) => OLD_EFFECTS[value] ?? (EFFECTS.includes(value) ? value : "auto");
 const EFFECTS_KEY = "energy-flow-card.effects";
 const WATCH_TIME = 60000;  // ms of moving picture per verdict
 const LOW_DENSITY = 1.5;
@@ -772,7 +779,9 @@ export class EnergyFlowView {
     this.contrastBusy = false;
     this.contrastDirty = false;
     this.densityCap = Infinity;
-    this.effects = "auto";
+    this.level = "high";
+    this.chosen = null;  // the level picked in the config or by the viewer on this device
+    this.trial = null;   // the level being tried out in the question
     this.fine = 0;
     this.watch = new FrameWatch((poor) => this.frameVerdict(poor));
     this.onEffects = () => this.applyEffects();
@@ -817,7 +826,7 @@ export class EnergyFlowView {
     this.observer?.disconnect();
     removeEventListener(EFFECTS_KEY, this.onEffects);
     this.watch.stop();
-    this.hint?.remove();
+    this.offer?.remove();
     this.shimmer?.destroy();
     this.pulses?.destroy();
   }
@@ -866,24 +875,31 @@ export class EnergyFlowView {
   }
 
   applyEffects() {
-    const kept = remembered(), mode = EFFECTS.includes(this.cfg.effects) ? this.cfg.effects : "auto";
-    this.effects = mode === "auto" && kept.choice === "reduced" ? "reduced" : mode;
-    const cap = this.effects === "reduced" ? 1 : this.effects === "auto" && kept.density ? kept.density : Infinity;
-    this.svg.classList.toggle("ef-lite", this.effects === "reduced");
-    if (kept.choice || this.effects !== "auto") { this.hint?.remove(); this.hint = null; }
+    const kept = remembered(), mode = effectsLevel(this.cfg.effects);
+    this.chosen = mode !== "auto" ? mode : kept.level ?? OLD_EFFECTS[kept.choice] ?? null;
+    if (this.chosen) this.closeOffer();
+    const level = this.trial ?? this.chosen;
+    this.setLevel(level ?? "high", level ? 0 : kept.density);
+    this.watchFrames();
+  }
+
+  // density: the lower density "auto" settled on before asking, if any
+  setLevel(level, density) {
+    this.level = level;
+    const cap = level === "high" && density ? density : LEVELS[level].cap;
+    this.svg.classList.toggle("ef-lite", level !== "high");
+    this.svg.classList.toggle("ef-low", level === "low");
     if (cap !== this.densityCap) {
       this.densityCap = cap;
       this.shimmer?.place();
       this.pulses?.place();
     }
     if ("celsius" in this) this.temperature(this.celsius);
-    this.watchFrames();
   }
 
-  // Watched only while there is something to judge and something left to do about it.
+  // Watched only while there is something to judge and nothing chosen yet.
   watchFrames() {
-    const kept = remembered();
-    const on = this.effects === "auto" && !kept.choice && !this.hint && this.fine < 3 && this.pulsesRun();
+    const on = !this.chosen && !this.offer && this.fine < 3 && this.pulsesRun();
     if (on) this.watch.start();
     else this.watch.stop();
   }
@@ -892,41 +908,60 @@ export class EnergyFlowView {
     if (!poor) { this.fine++; this.watchFrames(); return; }
     this.fine = 0;
     if ((devicePixelRatio || 1) > LOW_DENSITY && !(this.densityCap <= LOW_DENSITY)) remember({ density: LOW_DENSITY });
-    else this.offerReduce();
+    else this.offerLevels();
   }
 
-  offerReduce() {
-    if (this.hint) return;
-    const hint = this.hint = document.createElement("div");
-    hint.setAttribute("role", "status");
-    hint.style.cssText = "position:absolute;left:50%;top:12px;transform:translateX(-50%);z-index:2;display:flex;"
-      + "white-space:nowrap;gap:6px;align-items:center;width:max-content;max-width:calc(100% - 24px);"
-      + "box-sizing:border-box;padding:7px 7px 7px 14px;border-radius:18px;background:rgba(18,19,21,.9);color:#f1f1f1;"
-      + "font:13px/1.3 system-ui,-apple-system,sans-serif;box-shadow:0 2px 12px rgba(0,0,0,.45)";
-    const button = (label, choice, main) => {
-      const b = document.createElement("button");
-      b.type = "button";
-      b.textContent = label;
-      b.dataset.choice = choice;
-      b.style.cssText = "border:0;border-radius:14px;padding:6px 12px;font:inherit;cursor:pointer;"
-        + (main ? "background:#f1f1f1;color:#111" : "background:transparent;color:#c8c8c8");
-      return b;
+  // The question: three levels of detail, each tried on the picture as it is picked, kept with OK.
+  offerLevels() {
+    if (this.offer || this.chosen) return;
+    const el = (tag, css, text) => {
+      const e = document.createElement(tag);
+      if (css) e.style.cssText = css;
+      if (text) e.textContent = text;
+      return e;
     };
-    const text = document.createElement("span");
-    text.textContent = "Animation is choppy";
-    hint.append(text, button("Reduce effects", "reduced", true), button("Keep", "full", false));
-    // its own clicks: not a tap on the picture
-    for (const type of ["click", "pointerdown", "pointerup", "mousedown", "mouseup", "touchstart", "touchend"]) {
-      hint.addEventListener(type, (e) => e.stopPropagation());
+    const offer = this.offer = el("div", "position:absolute;left:50%;top:12px;transform:translateX(-50%);z-index:2;"
+      + "width:min(330px,calc(100% - 24px));box-sizing:border-box;padding:14px 16px 12px;border-radius:14px;"
+      + "background:rgba(18,19,21,.94);color:#f1f1f1;font:13px/1.35 system-ui,-apple-system,sans-serif;"
+      + "text-align:left;box-shadow:0 4px 18px rgba(0,0,0,.5)");
+    offer.setAttribute("role", "dialog");
+    offer.setAttribute("aria-label", "Animation detail");
+    offer.append(el("div", "margin:0 0 8px", "The animation appears choppy on this device. Would you like to try less detail?"));
+    const name = "ef-detail-" + Math.random().toString(36).slice(2);
+    for (const level of ["high", "medium", "low"]) {
+      const row = el("label", "display:flex;gap:10px;align-items:flex-start;padding:5px 0;cursor:pointer");
+      const radio = el("input", "margin:2px 0 0;accent-color:#f1f1f1;flex:none;width:16px;height:16px");
+      Object.assign(radio, { type: "radio", name, value: level, checked: level === "medium" });
+      const text = el("span");
+      text.append(el("b", "font-weight:600", LEVELS[level].label), el("span", "display:block;color:#b4b4b4", LEVELS[level].about));
+      row.append(radio, text);
+      offer.append(row);
     }
-    hint.addEventListener("click", (e) => {
-      const choice = e.target.closest("button")?.dataset.choice;
-      if (choice) remember({ choice });
+    const ok = el("button", "display:block;margin:6px 0 0 auto;border:0;border-radius:14px;padding:7px 22px;"
+      + "font:inherit;font-weight:600;cursor:pointer;background:#f1f1f1;color:#111", "OK");
+    ok.type = "button";
+    offer.append(ok);
+    // its own taps: not a tap on the picture
+    for (const type of ["click", "pointerdown", "pointerup", "mousedown", "mouseup", "touchstart", "touchend"]) {
+      offer.addEventListener(type, (e) => e.stopPropagation());
+    }
+    offer.addEventListener("change", (e) => { this.trial = e.target.value; this.applyEffects(); });
+    ok.addEventListener("click", () => {
+      const level = this.trial;
+      this.closeOffer();
+      remember({ level });
     });
     const host = this.svg.parentNode;
     if (getComputedStyle(host).position === "static") host.style.position = "relative";
-    host.append(hint);
-    this.watchFrames();
+    host.append(offer);
+    this.trial = "medium";
+    this.applyEffects();
+  }
+
+  closeOffer() {
+    this.offer?.remove();
+    this.offer = null;
+    this.trial = null;
   }
 
   // A battery's line: power, which way it flows (▼ out of the battery, ▲ into it) and its charge.
@@ -1166,7 +1201,7 @@ export class EnergyFlowView {
     const frost = missing(celsius) ? 0 : Math.max(0, Math.min(1, (FROST_START - celsius) / (FROST_START - FROST_FULL)));
     this.svg.classList.toggle("ef-frosty", frost > 0);
     this.svg.style.setProperty("--ef-frost", frost.toFixed(2));
-    if (hot && this.effects !== "reduced" && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    if (hot && LEVELS[this.level].shimmer && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
       this.shimmer ??= new HeatShimmer(this.svg, this);
       this.shimmer.show(Math.min(8, 3 + (celsius - HOT) * .4));
     } else {
