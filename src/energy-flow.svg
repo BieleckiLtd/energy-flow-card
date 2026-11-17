@@ -154,7 +154,6 @@
 @media (prefers-reduced-motion:reduce){.ef,.ef *{animation-play-state:paused!important}#ef-labels text,#ef-labels tspan{transition:none}}
 /* Parts the owner does not have are left out of the picture. */
 .ef-no-solar :is(#ef-solar-drop,#ef-solar-label,#ef-solar-lead),
-.ef-no-b1 :is(#ef-b1-battery,#ef-b1-reflection,#ef-l-b1,#ef-b1-label,#ef-b1-lead),
 .ef-no-b2 :is(#ef-b2-battery,#ef-b2-reflection,#ef-l-b2,#ef-b2-label,#ef-b2-lead){display:none}
 /* Residual snow: shown only while it snows, dimmer at night. */
 .ef-snowcap{fill:#e6ebf1;opacity:0;transition:opacity 1.8s ease}

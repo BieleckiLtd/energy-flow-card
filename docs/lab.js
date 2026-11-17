@@ -24,7 +24,7 @@
     solar: { show: true, name: "Solar", color: "#d6a62c" },
     home: { name: "Home" },
     grid: { name: "Grid", color: "#cfd3d6" },
-    battery1: { show: true, name: "Battery 1", color: "#4dbd80", face: "#eeeeee" },
+    battery1: { name: "Battery 1", color: "#4dbd80", face: "#eeeeee" },
     battery2: { show: true, name: "Battery 2", color: "#4aa5f2", face: "#4b4e54" },
   };
   const clone = (o) => JSON.parse(JSON.stringify(o));
@@ -42,6 +42,7 @@
       for (const k of ["place", "latitude", "longitude", "zone", "weather", "temperature", "balance", "effects"]) if (k in saved) state[k] = saved[k];
       Object.assign(state.power, saved.power || {});
       for (const part of Object.keys(DEFAULT_CONFIG)) Object.assign(state.config[part], saved.config?.[part] || {});
+      delete state.config.battery1.show;  // battery 1 is always there (older saves could switch it off)
     }
   } catch { /* a private window: start fresh */ }
   const save = () => {
@@ -104,7 +105,7 @@
   function balance() {
     const p = state.power, c = activeConfig();
     if (state.balance) {
-      const total = (c.solar.show ? p.solar : 0) + (c.battery1.show ? p.b1 : 0) + (c.battery2.show ? p.b2 : 0) + p.grid;
+      const total = (c.solar.show ? p.solar : 0) + p.b1 + (c.battery2.show ? p.b2 : 0) + p.grid;
       p.home = Math.max(0, +total.toFixed(1));
     }
   }
@@ -237,7 +238,7 @@
       config: {
         solar: { show: true, name: "Solar", color: "#e0a030" }, home: { name: "Home" },
         grid: { name: "Grid", color: "#aab3bc" },
-        battery1: { show: true, name: "Battery 1", color: "#3fa796", face: "#3a3d42" },
+        battery1: { name: "Battery 1", color: "#3fa796", face: "#3a3d42" },
         battery2: { show: true, name: "Battery 2", color: "#5b8def", face: "#c9ccd1" },
       },
       date: "2026-01-23", clock: [17, 30], weather: "snow", temperature: -3,
@@ -247,7 +248,7 @@
       title: "Just one battery", note: "a rainy night, cheap-rate grid power filling it up",
       config: {
         ...DEFAULT_CONFIG,
-        battery1: { show: true, name: "Battery 1", color: "#4f9fe0", face: "#d9dde2" },
+        battery1: { name: "Battery 1", color: "#4f9fe0", face: "#d9dde2" },
         battery2: { ...DEFAULT_CONFIG.battery2, show: false },
       },
       date: "2026-10-24", clock: [2, 30], weather: "rain", temperature: 9,
@@ -339,7 +340,7 @@
   function buildCases() {
     const box = $("cases");
     box.replaceChildren();
-    const c = state.config, have = { solar: c.solar.show, b1: c.battery1.show, b2: c.battery2.show };
+    const c = state.config, have = { solar: c.solar.show, b1: true, b2: c.battery2.show };
     for (const [label, solar, b1, b2, grid, time, needs] of cases()) {
       if (!needs.every((k) => have[k])) continue;
       const b = document.createElement("button");
@@ -422,7 +423,7 @@
   function buildParts() {
     const box = $("parts");
     box.replaceChildren();
-    const PARTS = [["solar", "Solar", true, ["color", "Flow"]], ["battery1", "Battery 1", true, ["color", "Flow"], ["face", "Glass"]],
+    const PARTS = [["solar", "Solar", true, ["color", "Flow"]], ["battery1", "Battery 1", false, ["color", "Flow"], ["face", "Glass"]],
       ["battery2", "Battery 2", true, ["color", "Flow"], ["face", "Glass"]], ["grid", "Grid", false, ["color", "Flow"]], ["home", "Home", false]];
     for (const [key, title, optional, ...colors] of PARTS) {
       const part = state.config[key];
@@ -492,11 +493,10 @@
     if (c.solar.show) block("solar", [["entity", "sensor.solar_power"]]);
     block("grid", [["entity", "sensor.grid_power"]]);
     block("home", [["entity", "sensor.home_power"]]);
-    // Batteries are on by default, so one switched off is written out.
-    for (const n of [1, 2]) {
-      if (c[`battery${n}`].show) block(`battery${n}`, [["power", `sensor.battery_${n}_power`], ["soc", `sensor.battery_${n}_charge`]]);
-      else lines.push(`battery${n}: false`);
-    }
+    block("battery1", [["power", "sensor.battery_1_power"], ["soc", "sensor.battery_1_charge"]]);
+    // Battery 2 is on by default, so switched off it is written out.
+    if (c.battery2.show) block("battery2", [["power", "sensor.battery_2_power"], ["soc", "sensor.battery_2_charge"]]);
+    else lines.push("battery2: false");
     return lines.join("\n") + "\n";
   }
   $("copy").addEventListener("click", async () => {

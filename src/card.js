@@ -27,9 +27,9 @@ export function normalizeConfig(config = {}) {
     const part = { ...DEFAULTS[key], ...c };
     for (const k of ["color", "face"]) if (part[k] && !validColor(part[k])) part[k] = DEFAULTS[key][k];
     if ("show" in DEFAULTS[key]) {
-      // Batteries are on unless switched off; solar shows once it has a sensor.
+      // Battery 2 is on unless switched off; solar shows once it has a sensor. Battery 1 is always there.
       const hasEntity = !!(c.entity || c.power || c.soc || c.charge || c.discharge);
-      part.show = c.show ?? (config.preview || key.startsWith("battery") ? true : hasEntity);
+      part.show = c.show ?? (config.preview || key === "battery2" ? true : hasEntity);
     }
     out[key] = part;
   }
@@ -221,7 +221,7 @@ export class EnergyFlowCard extends HTMLElement {
         { type: "expandable", name: "home", title: "Home", schema: [
           { name: "entity", selector: power }, { name: "name", selector: text }] },
         ...[1, 2].map((n) => ({ type: "expandable", name: `battery${n}`, title: `Battery ${n}`, schema: [
-          { name: "show", selector: { boolean: {} } }, { name: "power", selector: power }, { name: "soc", selector: power },
+          ...(n === 2 ? [{ name: "show", selector: { boolean: {} } }] : []), { name: "power", selector: power }, { name: "soc", selector: power },
           { name: "discharge", selector: power }, { name: "charge", selector: power },
           { name: "invert", selector: { boolean: {} } }, { name: "name", selector: text },
           color("color"), color("face")] })),
@@ -242,8 +242,8 @@ export class EnergyFlowCard extends HTMLElement {
     const weather = Object.keys(hass?.states || {}).find((id) => id.startsWith("weather.")) || "";
     // Only what was found goes in, so a new card's YAML has no empty entries. christmas stays: the editor shows a
     // missing switch as off.
-    // Both batteries are on by default; written out so the editor's switches show it.
-    const config = { christmas: true, battery1: { show: true }, battery2: { show: true } };
+    // Battery 2 is on by default; written out so the editor's switch shows it.
+    const config = { christmas: true, battery2: { show: true } };
     if (weather) config.weather = weather;
     for (const [part, key, id] of [["solar", "entity", find("solar", "pv")], ["grid", "entity", find("grid")],
       ["home", "entity", find("home", "house", "load", "consumption")], ["battery1", "power", find("battery")],

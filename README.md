@@ -56,7 +56,7 @@ battery2:
 | `name` | any part | Label in the picture |
 | `color` | solar, grid, batteries | Flow colour, `#rrggbb` |
 | `face` (or `glass`) | batteries | Colour of the glass cover, any `#rrggbb` |
-| `show` | solar, batteries | Batteries are on by default; `show: false` (or `battery2: false`) takes one out, and the labels left in the bottom row centre on their leaders. Solar shows once it has a sensor |
+| `show` | solar, battery2 | Battery 1 is always there. Battery 2 is on by default; `show: false` (or `battery2: false`) takes it out, and battery 1's label and the grid's then centre on their leaders. Solar shows once it has a sensor |
 | `weather` | card | A `weather.*` entity; without one the sky is clear |
 | `temperature` | card | Optional outdoor temperature sensor; without one the weather entity's temperature is used |
 | `latitude`, `longitude` | card | Sky location, if not Home Assistant's own |

@@ -22,7 +22,7 @@ export const DEFAULTS = {
   solar: { show: true, name: "Solar", color: "#d6a62c" },
   home: { name: "Home" },
   grid: { name: "Grid", color: "#cfd3d6" },
-  battery1: { show: true, name: "Battery 1", color: "#4dbd80", face: "#eeeeee" },
+  battery1: { name: "Battery 1", color: "#4dbd80", face: "#eeeeee" },
   battery2: { show: true, name: "Battery 2", color: "#4aa5f2", face: "#4b4e54" },
   look: { glass: "#2d334d", roof: "#333333", wall: "#0a0a0a", window: "#d6d3ca", background: "#17181a" },
 };
@@ -879,9 +879,8 @@ export class EnergyFlowView {
     this.cfg = cfg;
     const svg = this.svg;
     svg.classList.toggle("ef-no-solar", !cfg.solar.show);
-    svg.classList.toggle("ef-no-b1", !cfg.battery1.show);
     svg.classList.toggle("ef-no-b2", !cfg.battery2.show);
-    this.placeLabels(cfg.battery1.show && cfg.battery2.show);
+    this.placeLabels(cfg.battery2.show);  // battery 1 is always there
     const name = (id, value) => this.text(id, String(value ?? "").toUpperCase(), null);
     name("ef-solar-name", cfg.solar.name);
     name("ef-home-name", cfg.home.name);
@@ -902,7 +901,7 @@ export class EnergyFlowView {
   }
 
   // Two batteries share the bottom row: battery 1 right of its leader, battery 2 and the grid left of theirs.
-  // With one battery (or none) there is room, so each label is centred on its leader, as solar and home are.
+  // With battery 1 alone there is room, so each label is centred on its leader, as solar and home are.
   placeLabels(both) {
     this.labelPlaces ??= [...this.svg.querySelectorAll("#ef-b1-label text, #ef-b2-label text, #ef-grid-name, #ef-grid")]
       .map((el) => ({ el, x: el.getAttribute("x"), anchor: el.getAttribute("text-anchor") || "start",
@@ -1155,13 +1154,13 @@ export class EnergyFlowView {
   // shown, for the seasonal decorations; temperature (°C) brings heat shimmer or frost.
   update(state) {
     const cfg = this.cfg, color = this.colors;
-    const b1 = cfg.battery1.show ? state.battery1 || {} : {}, b2 = cfg.battery2.show ? state.battery2 || {} : {};
+    const b1 = state.battery1 || {}, b2 = cfg.battery2.show ? state.battery2 || {} : {};
     const solar = cfg.solar.show ? Math.max(0, flow(state.solar)) : 0;
     const b1w = flow(b1.power), b2w = flow(b2.power), grid = flow(state.grid);
     let home = state.home;
     // Home worked out from the others only when every part in the picture has a reading: with one sensor unavailable
     // the sum would be wrong, so home shows a dash too.
-    const inputs = [state.grid, cfg.solar.show && state.solar, cfg.battery1.show && b1.power, cfg.battery2.show && b2.power]
+    const inputs = [state.grid, cfg.solar.show && state.solar, b1.power, cfg.battery2.show && b2.power]
       .filter((v) => v !== false);
     if (missing(home) && inputs.every((v) => !missing(v))) {
       home = Math.max(0, inputs.reduce((sum, v) => sum + v, 0));
