@@ -719,7 +719,7 @@ class PulseRenderer {
 export const EFFECTS = ["auto", "high", "medium", "low"];
 const LEVELS = {
   high: { cap: Infinity, shimmer: true, label: "High" },
-  medium: { cap: 1.5, shimmer: true, label: "Medium" },
+  medium: { cap: 1.5, shimmer: false, label: "Medium" },
   low: { cap: 1, shimmer: false, label: "Low" },
 };
 const OLD_EFFECTS = { full: "high", reduced: "low" };  // the names in 0.4.0
