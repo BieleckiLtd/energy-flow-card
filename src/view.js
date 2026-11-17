@@ -123,8 +123,9 @@ const lookKey = (svg) => [...svg.classList].filter((c) => !TRANSIENT.has(c)).joi
   + "|" + svg.getAttribute("data-weather") + "|" + svg.getAttribute("data-time");
 
 class HeatShimmer {
-  constructor(svg) {
+  constructor(svg, view) {
     this.svg = svg;
+    this.view = view;
     this.scale = 3;
     this.markup = null;
     this.busy = false;
@@ -219,7 +220,7 @@ class HeatShimmer {
   // Lines the canvas up with the picture's drawing area inside the svg box.
   place() {
     if (this.failed || !this.canvas.isConnected) return;
-    const size = fitCanvas(this.canvas, this.svg);
+    const size = fitCanvas(this.canvas, this.svg, this.view.densityCap);
     if (!size) return;
     const { w, h } = size;
     if (w !== this.canvas.width || h !== this.canvas.height) {
@@ -335,8 +336,9 @@ class HeatShimmer {
   }
 }
 
-// Lines a canvas up with the picture's drawing area inside the svg box; returns its size in device pixels.
-function fitCanvas(canvas, svg) {
+// Lines a canvas up with the picture's drawing area inside the svg box; returns its size in device pixels, at
+// most cap pixels per CSS pixel.
+function fitCanvas(canvas, svg, cap = Infinity) {
   const parent = canvas.offsetParent;
   if (!parent) return null;
   const box = svg.getBoundingClientRect(), host = parent.getBoundingClientRect();
@@ -346,7 +348,7 @@ function fitCanvas(canvas, svg) {
   if (width / height > 1170 / 1408) { left += (width - height * 1170 / 1408) / 2; width = height * 1170 / 1408; }
   else { top += (height - width * 1408 / 1170) / 2; height = width * 1408 / 1170; }
   Object.assign(canvas.style, { left: `${left}px`, top: `${top}px`, width: `${width}px`, height: `${height}px` });
-  const density = Math.min(devicePixelRatio || 1, 2048 / width);
+  const density = Math.min(devicePixelRatio || 1, cap, 2048 / width);
   return { w: Math.round(width * density), h: Math.round(height * density) };
 }
 
@@ -578,7 +580,7 @@ class PulseRenderer {
 
   place() {
     if (this.failed || !this.canvas.isConnected) return;
-    const size = fitCanvas(this.canvas, this.svg);
+    const size = fitCanvas(this.canvas, this.svg, this.view.densityCap);
     if (!size || (size.w === this.canvas.width && size.h === this.canvas.height)) return;
     this.canvas.width = size.w;
     this.canvas.height = size.h;
@@ -710,6 +712,52 @@ class PulseRenderer {
   }
 }
 
+// Effects. With "auto" the view watches how evenly the picture moves while it is on screen. Where frames keep
+// dropping, the GPU canvases first draw at a lower density (hard to see on a sharp screen); if that is not enough,
+// the card offers to reduce the effects (half the rain and snow, no heat shimmer, canvases at one pixel per CSS
+// pixel). The lower density and the viewer's answer are remembered on the device. "full" and "reduced" fix it.
+export const EFFECTS = ["auto", "full", "reduced"];
+const EFFECTS_KEY = "energy-flow-card.effects";
+const WATCH_TIME = 60000;  // ms of moving picture per verdict
+const LOW_DENSITY = 1.5;
+function remembered() {
+  try { return JSON.parse(localStorage.getItem(EFFECTS_KEY)) || {}; } catch { return {}; }
+}
+function remember(patch) {
+  try { localStorage.setItem(EFFECTS_KEY, JSON.stringify({ ...remembered(), ...patch })); } catch { /* private mode */ }
+  dispatchEvent(new Event(EFFECTS_KEY));  // every card on the page follows
+}
+
+// Whether frame times show a struggling page. The screen's own frame time is taken from the quickest frames, so a
+// browser that caps the page at 30 fps (iPhone Low Power Mode) reads as smooth while it is even; what counts is
+// time lost to frames that came late.
+export function choppy(times) {
+  if (times.length < 30) return false;
+  const sorted = [...times].sort((a, b) => a - b);
+  const base = sorted[Math.floor(sorted.length * .1)];
+  let lost = 0, total = 0;
+  for (const t of times) { total += t; if (t > base * 1.7) lost += t - base; }
+  return base > 45 || lost / total > .2;
+}
+
+class FrameWatch {
+  constructor(verdict) {
+    this.verdict = verdict;
+    this.raf = 0;
+    this.reset();
+    this.frame = (now) => {
+      this.raf = requestAnimationFrame(this.frame);
+      const dt = now - this.last;
+      if (this.last && dt < 1000) { this.times.push(dt); this.total += dt; }  // not the gap after a pause
+      this.last = now;
+      if (this.total >= WATCH_TIME) { const poor = choppy(this.times); this.reset(); this.verdict(poor); }
+    };
+  }
+  reset() { this.times = []; this.total = 0; this.last = 0; }
+  start() { if (!this.raf) { this.last = 0; this.raf = requestAnimationFrame(this.frame); } }
+  stop() { cancelAnimationFrame(this.raf); this.raf = 0; }
+}
+
 export class EnergyFlowView {
   constructor(container, svgText) {
     container.innerHTML = svgText;
@@ -723,6 +771,12 @@ export class EnergyFlowView {
     this.seen = true;
     this.contrastBusy = false;
     this.contrastDirty = false;
+    this.densityCap = Infinity;
+    this.effects = "auto";
+    this.fine = 0;
+    this.watch = new FrameWatch((poor) => this.frameVerdict(poor));
+    this.onEffects = () => this.applyEffects();
+    addEventListener(EFFECTS_KEY, this.onEffects);
 
     const svg = this.svg;
     // Flows drawn as <use> copies of a shared pulse (the house lanes) become real copies, so that every dash is an
@@ -761,6 +815,9 @@ export class EnergyFlowView {
   destroy() {
     document.removeEventListener("visibilitychange", this.onVisibility);
     this.observer?.disconnect();
+    removeEventListener(EFFECTS_KEY, this.onEffects);
+    this.watch.stop();
+    this.hint?.remove();
     this.shimmer?.destroy();
     this.pulses?.destroy();
   }
@@ -803,8 +860,73 @@ export class EnergyFlowView {
       solar: cfg.solar.color, grid: cfg.grid.color, b1: cfg.battery1.color, b2: cfg.battery2.color,
     };
     this.contrastKey = null;
+    this.applyEffects();
     this.shimmer?.invalidate();
     this.scheduleLabelContrast();
+  }
+
+  applyEffects() {
+    const kept = remembered(), mode = EFFECTS.includes(this.cfg.effects) ? this.cfg.effects : "auto";
+    this.effects = mode === "auto" && kept.choice === "reduced" ? "reduced" : mode;
+    const cap = this.effects === "reduced" ? 1 : this.effects === "auto" && kept.density ? kept.density : Infinity;
+    this.svg.classList.toggle("ef-lite", this.effects === "reduced");
+    if (kept.choice || this.effects !== "auto") { this.hint?.remove(); this.hint = null; }
+    if (cap !== this.densityCap) {
+      this.densityCap = cap;
+      this.shimmer?.place();
+      this.pulses?.place();
+    }
+    if ("celsius" in this) this.temperature(this.celsius);
+    this.watchFrames();
+  }
+
+  // Watched only while there is something to judge and something left to do about it.
+  watchFrames() {
+    const kept = remembered();
+    const on = this.effects === "auto" && !kept.choice && !this.hint && this.fine < 3 && this.pulsesRun();
+    if (on) this.watch.start();
+    else this.watch.stop();
+  }
+
+  frameVerdict(poor) {
+    if (!poor) { this.fine++; this.watchFrames(); return; }
+    this.fine = 0;
+    if ((devicePixelRatio || 1) > LOW_DENSITY && !(this.densityCap <= LOW_DENSITY)) remember({ density: LOW_DENSITY });
+    else this.offerReduce();
+  }
+
+  offerReduce() {
+    if (this.hint) return;
+    const hint = this.hint = document.createElement("div");
+    hint.setAttribute("role", "status");
+    hint.style.cssText = "position:absolute;left:50%;top:12px;transform:translateX(-50%);z-index:2;display:flex;"
+      + "white-space:nowrap;gap:6px;align-items:center;width:max-content;max-width:calc(100% - 24px);"
+      + "box-sizing:border-box;padding:7px 7px 7px 14px;border-radius:18px;background:rgba(18,19,21,.9);color:#f1f1f1;"
+      + "font:13px/1.3 system-ui,-apple-system,sans-serif;box-shadow:0 2px 12px rgba(0,0,0,.45)";
+    const button = (label, choice, main) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = label;
+      b.dataset.choice = choice;
+      b.style.cssText = "border:0;border-radius:14px;padding:6px 12px;font:inherit;cursor:pointer;"
+        + (main ? "background:#f1f1f1;color:#111" : "background:transparent;color:#c8c8c8");
+      return b;
+    };
+    const text = document.createElement("span");
+    text.textContent = "Animation is choppy";
+    hint.append(text, button("Reduce effects", "reduced", true), button("Keep", "full", false));
+    // its own clicks: not a tap on the picture
+    for (const type of ["click", "pointerdown", "pointerup", "mousedown", "mouseup", "touchstart", "touchend"]) {
+      hint.addEventListener(type, (e) => e.stopPropagation());
+    }
+    hint.addEventListener("click", (e) => {
+      const choice = e.target.closest("button")?.dataset.choice;
+      if (choice) remember({ choice });
+    });
+    const host = this.svg.parentNode;
+    if (getComputedStyle(host).position === "static") host.style.position = "relative";
+    host.append(hint);
+    this.watchFrames();
   }
 
   // A battery's line: power, which way it flows (▼ out of the battery, ▲ into it) and its charge.
@@ -1025,6 +1147,9 @@ export class EnergyFlowView {
     // The pulses on the GPU where the browser can; otherwise the svg's own stay.
     this.pulses ??= typeof WebGLRenderingContext === "function" ? new PulseRenderer(this) : null;
     this.pulses?.update();
+    // A new look (weather, heat) is judged afresh.
+    const look = lookKey(this.svg);
+    if (look !== this.watchedLook) { this.watchedLook = look; this.fine = 0; this.watchFrames(); }
 
     if (this.svg.classList.contains("ef-still")) {
       this.svg.getBoundingClientRect();  // lays the lanes out where they are before transitions are switched on
@@ -1035,13 +1160,14 @@ export class EnergyFlowView {
 
   // Air temperature in °C, or nothing. The shimmer grows a little stronger with the heat.
   temperature(celsius) {
+    this.celsius = celsius;
     const hot = !missing(celsius) && celsius > HOT;
     this.svg.classList.toggle("ef-hot", hot);
     const frost = missing(celsius) ? 0 : Math.max(0, Math.min(1, (FROST_START - celsius) / (FROST_START - FROST_FULL)));
     this.svg.classList.toggle("ef-frosty", frost > 0);
     this.svg.style.setProperty("--ef-frost", frost.toFixed(2));
-    if (hot && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      this.shimmer ??= new HeatShimmer(this.svg);
+    if (hot && this.effects !== "reduced" && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      this.shimmer ??= new HeatShimmer(this.svg, this);
       this.shimmer.show(Math.min(8, 3 + (celsius - HOT) * .4));
     } else {
       this.shimmer?.hide();
@@ -1052,6 +1178,7 @@ export class EnergyFlowView {
     this.svg.classList.toggle("ef-paused", !this.seen || document.hidden);
     this.shimmer?.sync();
     this.pulses?.sync();
+    this.watchFrames();
     this.alignBeats();
     this.scheduleLabelContrast();
   }
