@@ -78,7 +78,7 @@ your home location. Any other weather integration (OpenWeatherMap, Pirate Weathe
 Rain, snow, fog and storms come from the entity's state. The sun and moon are worked out from Home Assistant's
 location (or `latitude`/`longitude`), so they need nothing.
 
-The temperature changes the picture too: above 30 °C hot air shimmers over the sky and roofs, and below 3 °C
+The temperature changes the picture too: above 30 °C heat haze rises off the roofs, and below 3 °C
 frost grows over the roofs, panels, wall feet, ground and window corners, fully grown at −10 °C. It comes from the
 weather entity, or from a `temperature` sensor if you set one (°F works too).
 

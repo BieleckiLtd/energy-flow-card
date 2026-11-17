@@ -255,7 +255,7 @@ const LABELS = {
   window: "Window", background: "Background",
 };
 const HELPERS = {
-  temperature: "Above 30 °C the air shimmers; below 3 °C frost grows, fully at -10 °C. Without a sensor the weather entity's temperature is used.",
+  temperature: "Above 30 °C heat haze rises off the roofs; below 3 °C frost grows, fully at -10 °C. Without a sensor the weather entity's temperature is used.",
   invert: "Grid: + is import. Batteries: + is discharging. Turn on if your sensor uses the other sign.",
 };
 
