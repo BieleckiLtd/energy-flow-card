@@ -247,7 +247,7 @@ class HeatShimmer {
   // A new snapshot, once things settle, if the still parts look any different.
   refresh() {
     if (this.failed || !this.canvas.width) return;
-    if (this.markup && this.key === lookKey(this.svg) && performance.now() - this.snapAt < RESAMPLE) return;
+    if (this.markup && this.key === this.view.stillKey() && performance.now() - this.snapAt < RESAMPLE) return;
     this.dirty = true;
     if (this.busy || (this.shown && !this.running())) return;
     this.busy = true;
@@ -255,7 +255,7 @@ class HeatShimmer {
       try {
         while (this.dirty && !this.failed && this.svg.classList.contains("ef-hot")) {
           this.dirty = false;
-          const key = lookKey(this.svg);
+          const key = this.view.stillKey();
           const markup = this.stillMarkup();
           if (markup === this.markup) { this.key = key; this.snapAt = performance.now(); continue; }
           const url = URL.createObjectURL(new Blob([markup], { type: "image/svg+xml" }));
@@ -1133,9 +1133,17 @@ export class EnergyFlowView {
     this.light("sun", sun, sunlight, sunlight * (.45 + .35 * sunHeight));
 
     const fraction = moon?.illuminated ?? 0;
+    const moonlightKey = () => moon ? `${Math.round(skyX(moon.progress) / 4)},${Math.round(moon.altitude)}` : "";
     const moonlight = moon ? visibility * (1 - smoothstep(-6, HORIZON, altitude)) * smoothstep(HORIZON, 2, moon.altitude) : 0;
     const moonBrightness = moonlight * Math.min(1, fraction * 45);
     this.light("moon", moon, moonBrightness, moonlight * fraction ** 1.5 * .75);
+    // Snapshots of the picture (heat shimmer, label contrast) are taken again once the sky looks different: the sun
+    // or moon a few units on, or the light a step brighter or darker. Coarse enough that a live card, whose sky
+    // creeps, re-takes them only every few minutes; a jump in time (the lab's slider) re-takes them at once.
+    const step = (v) => Math.round(v * 40);
+    this.skyKey = [step(1 - smoothstep(-13, 10, altitude)), step(twilight * visibility), step(sunlight),
+      sun && sunlight ? `${Math.round(skyX(sun.progress) / 4)},${Math.round(altitude)}` : "",
+      step(moonBrightness), moonBrightness ? moonlightKey() : ""].join(",");
     if (!moonBrightness) return;
 
     // The limb is a semicircle, and the terminator is an ellipse whose width follows the illuminated fraction.
@@ -1281,7 +1289,7 @@ export class EnergyFlowView {
 
   async sampleLabelContrast() {
     // Rasterize the background locally at a small size, with the labels removed from the sample.
-    const svg = this.svg, key = lookKey(svg);
+    const svg = this.svg, key = this.stillKey();
     const scene = svg.cloneNode(true);
     scene.querySelector("#ef-labels").remove();
     scene.classList.remove("ef-baked");  // the still parts the shimmer canvas draws are background too
@@ -1314,9 +1322,12 @@ export class EnergyFlowView {
     }
   }
 
+  // What the still parts of the picture look like: the look (weather, night, decorations) and the sky.
+  stillKey() { return `${lookKey(this.svg)}|${this.skyKey ?? ""}`; }
+
   scheduleLabelContrast() {
     if (!this.canSampleContrast()) return;
-    if (this.contrastKey === lookKey(this.svg) && performance.now() - this.contrastAt < RESAMPLE) return;
+    if (this.contrastKey === this.stillKey() && performance.now() - this.contrastAt < RESAMPLE) return;
     this.contrastDirty = true;
     if (this.contrastBusy) return;
     this.contrastBusy = true;
