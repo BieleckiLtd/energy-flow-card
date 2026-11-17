@@ -265,7 +265,7 @@
 <path id="ef-route-grid" d="M580.5 903V974Q580.5 989.5 594 994.4L938 1119.5"/>
 <!-- The grid pulse: riser and bend as one band, then along the ground a top face (cut along the wall's direction)
      and a narrow side face (cut upright), each in its own frame starting at the end of the bend. -->
-<path id="ef-route-grid-riser" d="M580.5 903V974Q580.5 989.5 594 994.4"/>
+<path id="ef-route-grid-riser" d="M580.5 903V974Q580.5 989.5 594 994.4L594.28 994.5"/>
 <path id="ef-route-grid-top" d="M-11 -2H380"/>
 <path id="ef-route-grid-side" d="M-3 4.5H380"/>
 <clipPath id="ef-grid-seam"><path d="M604.25 966.21 583.75 1022.59 1053.65 1193.48 1074.15 1137.1Z"/></clipPath>
@@ -636,7 +636,7 @@
 <g class="ef-grid-pipe">
   <use href="#ef-rail-grid" class="ef-lane"/>
   <g id="ef-f-grid" class="ef-flow" data-route="ef-route-grid" data-flow="off" style="--ef-source-color:var(--ef-grid-color,#cfd3d6)">
-    <g>
+    <g data-head-skew="-6.5:14.34 2.5:0 6.5:1.46" data-head-ramp="26">
       <use class="ef-pulse ef-p1" href="#ef-route-grid-riser"/>
       <use class="ef-pulse ef-p2" href="#ef-route-grid-riser"/>
       <use class="ef-pulse ef-p3" href="#ef-route-grid-riser"/>
@@ -799,7 +799,7 @@
     </g>
   </g>
   <g id="ef-f-grid2" class="ef-flow" data-route="ef-route-grid" data-flow="off" style="--ef-source-color:var(--ef-grid-color,#cfd3d6)">
-    <g>
+    <g data-head-skew="-6.5:14.34 2.5:0 6.5:1.46" data-head-ramp="26">
       <use class="ef-pulse ef-p1" href="#ef-route-grid-riser"/>
       <use class="ef-pulse ef-p2" href="#ef-route-grid-riser"/>
       <use class="ef-pulse ef-p3" href="#ef-route-grid-riser"/>
@@ -962,7 +962,7 @@
     </g>
   </g>
   <g id="ef-f-grid3" class="ef-flow" data-route="ef-route-grid" data-flow="off" style="--ef-source-color:var(--ef-grid-color,#cfd3d6)">
-    <g>
+    <g data-head-skew="-6.5:14.34 2.5:0 6.5:1.46" data-head-ramp="26">
       <use class="ef-pulse ef-p1" href="#ef-route-grid-riser"/>
       <use class="ef-pulse ef-p2" href="#ef-route-grid-riser"/>
       <use class="ef-pulse ef-p3" href="#ef-route-grid-riser"/>

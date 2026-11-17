@@ -495,17 +495,33 @@ class PulseRenderer {
       const s = total * i / steps, p = route.getPointAtLength(s);
       points.push({ x: p.x, y: p.y, s });
     }
-    const half = piece.width / 2, data = [];
-    points.forEach((p, i) => {
+    // Across the stroke: its two edges, or more columns where the head turns into a face that is cut on a slant
+    // (data-head-skew="offset:lead ...", offsets across the stroke on the route's left-hand normal, leads in route
+    // units, reached over the last data-head-ramp units). The grid riser's head leans that way through its bend,
+    // so it meets the slanted head of the top face beyond the seam without a gap.
+    const half = piece.width / 2, data = [], host = piece.group.closest("[data-head-skew]");
+    let columns = [{ p: -half, lead: 0 }, { p: half, lead: 0 }], ramp = 0;
+    if (host) {
+      columns = host.dataset.headSkew.trim().split(/\s+/).map((t) => { const [p, lead] = t.split(":").map(Number); return { p, lead }; })
+        .sort((a, b) => a.p - b.p);
+      ramp = Number(host.dataset.headRamp) || 0;
+    }
+    const rows = points.map((p, i) => {
       const a = points[Math.max(0, i - 1)], b = points[Math.min(points.length - 1, i + 1)];
       const dx = b.x - a.x, dy = b.y - a.y, n = Math.hypot(dx, dy) || 1;
-      const nx = -dy / n * half, ny = dx / n * half;
-      data.push(p.x + nx, p.y + ny, p.s, p.x - nx, p.y - ny, p.s);
+      const turn = ramp ? smoothstep(total - ramp, total, p.s) : 0;
+      return columns.map((c) => [p.x - dy / n * c.p, p.y + dx / n * c.p, p.s - c.lead * turn]);
     });
+    for (let i = 0; i + 1 < rows.length; i++) {
+      for (let j = 0; j + 1 < columns.length; j++) {
+        const [a, b, c, d] = [rows[i][j], rows[i][j + 1], rows[i + 1][j], rows[i + 1][j + 1]];
+        data.push(...a, ...b, ...c, ...b, ...d, ...c);
+      }
+    }
     piece.buffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, piece.buffer);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(data), gl.STATIC_DRAW);
-    piece.count = points.length * 2;
+    piece.count = data.length / 3;
     piece.clip = null;
     const shape = piece.clipHost && this.svg.getElementById(piece.clipHost.getAttribute("clip-path").match(/#([^)"']+)/)?.[1])?.firstElementChild;
     if (shape) {
@@ -707,7 +723,7 @@ class PulseRenderer {
       gl.vertexAttribPointer(this.a.pos, 2, gl.FLOAT, false, 12, 0);
       gl.enableVertexAttribArray(this.a.s);
       gl.vertexAttribPointer(this.a.s, 1, gl.FLOAT, false, 12, 8);
-      gl.drawArrays(gl.TRIANGLE_STRIP, 0, piece.count);
+      gl.drawArrays(gl.TRIANGLES, 0, piece.count);
     }
   }
 }
