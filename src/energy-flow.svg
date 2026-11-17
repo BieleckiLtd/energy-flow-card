@@ -47,6 +47,9 @@
   --ef-direction:-1;--ef-leading-edge:1}
 .ef-flow[data-flow=in]{--ef-direction:1;--ef-leading-edge:0}
 .ef-flow[data-flow=off]{display:none}
+/* Drawn by the view on a WebGL canvas over the picture once that works; the dashes here then rest. */
+.ef-gl .ef-pulse{display:none}
+.ef-gl .ef-flow{animation:none}
 /* The head crosses the junction at phase zero. Incoming pulses start one wire length earlier. */
 .ef-pulse{stroke-dasharray:var(--ef-length) calc(var(--ef-cycle-distance) * var(--ef-turns,1) - var(--ef-length));
   stroke-dashoffset:calc(var(--ef-leading-edge) * var(--ef-length) + var(--ef-direction) * var(--ef-beat,0) - var(--ef-junction,0) + var(--ef-turn,0) * var(--ef-cycle-distance))}

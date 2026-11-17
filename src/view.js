@@ -219,17 +219,9 @@ class HeatShimmer {
   // Lines the canvas up with the picture's drawing area inside the svg box.
   place() {
     if (this.failed || !this.canvas.isConnected) return;
-    const parent = this.canvas.offsetParent;
-    if (!parent) return;
-    const box = this.svg.getBoundingClientRect(), host = parent.getBoundingClientRect();
-    if (!box.width || !box.height) return;
-    let width = box.width, height = box.height;
-    let left = box.left - host.left - parent.clientLeft, top = box.top - host.top - parent.clientTop;
-    if (width / height > 1170 / 1408) { left += (width - height * 1170 / 1408) / 2; width = height * 1170 / 1408; }
-    else { top += (height - width * 1408 / 1170) / 2; height = width * 1408 / 1170; }
-    Object.assign(this.canvas.style, { left: `${left}px`, top: `${top}px`, width: `${width}px`, height: `${height}px` });
-    const density = Math.min(devicePixelRatio || 1, 2048 / width);
-    const w = Math.round(width * density), h = Math.round(height * density);
+    const size = fitCanvas(this.canvas, this.svg);
+    if (!size) return;
+    const { w, h } = size;
     if (w !== this.canvas.width || h !== this.canvas.height) {
       this.canvas.width = w;
       this.canvas.height = h;
@@ -343,6 +335,381 @@ class HeatShimmer {
   }
 }
 
+// Lines a canvas up with the picture's drawing area inside the svg box; returns its size in device pixels.
+function fitCanvas(canvas, svg) {
+  const parent = canvas.offsetParent;
+  if (!parent) return null;
+  const box = svg.getBoundingClientRect(), host = parent.getBoundingClientRect();
+  if (!box.width || !box.height) return null;
+  let width = box.width, height = box.height;
+  let left = box.left - host.left - parent.clientLeft, top = box.top - host.top - parent.clientTop;
+  if (width / height > 1170 / 1408) { left += (width - height * 1170 / 1408) / 2; width = height * 1170 / 1408; }
+  else { top += (height - width * 1408 / 1170) / 2; height = width * 1408 / 1170; }
+  Object.assign(canvas.style, { left: `${left}px`, top: `${top}px`, width: `${width}px`, height: `${height}px` });
+  const density = Math.min(devicePixelRatio || 1, 2048 / width);
+  return { w: Math.round(width * density), h: Math.round(height * density) };
+}
+
+function compileProgram(gl, vertex, fragment) {
+  const shader = (type, source) => {
+    const s = gl.createShader(type);
+    gl.shaderSource(s, source);
+    gl.compileShader(s);
+    return gl.getShaderParameter(s, gl.COMPILE_STATUS) ? s : null;
+  };
+  const vs = shader(gl.VERTEX_SHADER, vertex), fs = shader(gl.FRAGMENT_SHADER, fragment);
+  if (!vs || !fs) return null;
+  const program = gl.createProgram();
+  gl.attachShader(program, vs);
+  gl.attachShader(program, fs);
+  gl.linkProgram(program);
+  return gl.getProgramParameter(program, gl.LINK_STATUS) ? program : null;
+}
+
+// Energy pulses on the GPU. In the svg each pulse is ~50 stacked dashes that all end at its head, so their opacities
+// add up to a smooth tail; moving 918 of them by CSS made the browser restyle every one on every frame, which phones
+// and tablets could not keep up with. Here each piece of a pulse is one strip along its route, and the shader works
+// out the same stacked dashes per pixel from the beat. The canvas sits over the picture; what the svg draws over
+// the pulses (meter box, panels, batteries, pipe edges, fog...) is rasterized into masks that cut them out again.
+const DASHES = 52;  // dash slots in the shader, a multiple of 4 (the svg has 51)
+const PULSE_VERTEX = `attribute vec2 a_pos;attribute float a_s;
+uniform mat3 u_m;varying float v_s;varying vec2 v_svg;
+void main(){vec3 p=u_m*vec3(a_pos,1.);v_svg=p.xy;v_s=a_s;gl_Position=vec4(p.x/585.-1.,1.-p.y/704.,0.,1.);}`;
+const PULSE_FRAGMENT = `precision highp float;
+uniform vec4 u_len[${DASHES / 4}],u_op[${DASHES / 4}];
+uniform float u_lead,u_shift,u_period,u_aa,u_alpha,u_clipOn;
+uniform vec3 u_color;
+uniform vec2 u_clip[4];
+uniform vec4 u_box;
+uniform sampler2D u_mask;
+varying float v_s;varying vec2 v_svg;
+float cover(float L,float o){
+  if(o<=0.)return 1.;
+  float u=mod(v_s+u_lead*L+u_shift,u_period);
+  float c=max(clamp(min(u,L-u)/u_aa+.5,0.,1.),clamp((u-u_period)/u_aa+.5,0.,1.));
+  return 1.-o*c;
+}
+float edge(vec2 a,vec2 b){vec2 d=normalize(b-a);return (v_svg-a).y*d.x-(v_svg-a).x*d.y;}
+void main(){
+  float keep=1.;
+  for(int i=0;i<${DASHES / 4};i++){
+    keep*=cover(u_len[i].x,u_op[i].x)*cover(u_len[i].y,u_op[i].y)*cover(u_len[i].z,u_op[i].z)*cover(u_len[i].w,u_op[i].w);
+  }
+  float a=(1.-keep)*u_alpha;
+  if(u_clipOn>0.){
+    float d=min(min(edge(u_clip[0],u_clip[1]),edge(u_clip[1],u_clip[2])),min(edge(u_clip[2],u_clip[3]),edge(u_clip[3],u_clip[0])));
+    a*=clamp(d/u_aa+.5,0.,1.);
+  }
+  a*=1.-texture2D(u_mask,(v_svg-u_box.xy)/u_box.zw).a;
+  gl_FragColor=vec4(u_color*a,a);
+}`;
+const PULSE_BOX = [300, 640, 700, 520];  // x, y, width, height: where pulses can be, in the picture's units
+const MASK_WAIT = 700;  // ms after a change before the masks are drawn again (lanes slide for .55 s)
+
+class PulseRenderer {
+  constructor(view) {
+    this.view = view;
+    this.svg = view.svg;
+    this.ready = false;
+    this.raf = 0;
+    const canvas = this.canvas = document.createElement("canvas");
+    canvas.setAttribute("aria-hidden", "true");
+    canvas.style.cssText = "position:absolute;pointer-events:none;visibility:hidden";
+    const gl = this.gl = canvas.getContext("webgl", { alpha: true, premultipliedAlpha: true, antialias: true, depth: false, stencil: false });
+    if (!gl || gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_VECTORS) < DASHES / 2 + 12 || !this.build()) { this.failed = true; return; }
+    canvas.addEventListener("webglcontextlost", (e) => { e.preventDefault(); this.destroy(); });
+    this.frame = (now) => {
+      this.raf = 0;
+      this.draw(now);
+      if (this.view.pulsesRun()) this.raf = requestAnimationFrame(this.frame);
+    };
+    this.pieces = this.findPieces();
+    this.resizer = typeof ResizeObserver === "function" ? new ResizeObserver(() => this.place()) : null;
+  }
+
+  build() {
+    const gl = this.gl, program = compileProgram(gl, PULSE_VERTEX, PULSE_FRAGMENT);
+    if (!program) return false;
+    gl.useProgram(program);
+    this.a = { pos: gl.getAttribLocation(program, "a_pos"), s: gl.getAttribLocation(program, "a_s") };
+    this.u = {};
+    for (const n of ["u_m", "u_len", "u_op", "u_lead", "u_shift", "u_period", "u_aa", "u_alpha", "u_clipOn", "u_color", "u_clip", "u_box", "u_mask"]) {
+      this.u[n] = gl.getUniformLocation(program, n);
+    }
+    gl.uniform1i(this.u.u_mask, 0);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    this.blank = this.texture(new Uint8Array([0, 0, 0, 0]));
+    return true;
+  }
+
+  texture(pixel) {
+    const gl = this.gl, t = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, t);
+    for (const p of [gl.TEXTURE_WRAP_S, gl.TEXTURE_WRAP_T]) gl.texParameteri(gl.TEXTURE_2D, p, gl.CLAMP_TO_EDGE);
+    for (const p of [gl.TEXTURE_MIN_FILTER, gl.TEXTURE_MAG_FILTER]) gl.texParameteri(gl.TEXTURE_2D, p, gl.LINEAR);
+    if (pixel) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
+    return t;
+  }
+
+  // Every group of stacked dashes is one piece: same route, frame, colour and width.
+  findPieces() {
+    const pieces = [], levels = new Map();
+    for (const flow of this.svg.querySelectorAll(".ef-flow")) {
+      const groups = new Map();
+      for (const dash of flow.querySelectorAll(".ef-pulse")) {
+        if (!groups.has(dash.parentNode)) groups.set(dash.parentNode, []);
+        groups.get(dash.parentNode).push(dash);
+      }
+      // Pulses at one depth in the picture share a mask: everything drawn after the first of them.
+      const level = flow.closest("#ef-lines, .ef-grid-pipe, #ef-solar-drop") || flow;
+      if (!levels.has(level)) levels.set(level, { first: flow, texture: null });
+      for (const [group, dashes] of groups) {
+        const clipHost = group.closest("[clip-path]");
+        pieces.push({ group, dashes, flow, line: flow.closest(".ef-line"), level: levels.get(level),
+          route: this.svg.getElementById(dashes[0].getAttribute("href").slice(1)),
+          clipHost: clipHost && this.svg.contains(clipHost) ? clipHost : null });
+      }
+    }
+    this.levels = [...levels.values()];
+    for (const piece of pieces) this.measure(piece);
+    return pieces;
+  }
+
+  // Fixed per piece: the route as a strip, the dashes' lengths and opacities, the clip.
+  measure(piece) {
+    const gl = this.gl, style = (el) => getComputedStyle(el);
+    const lengths = new Float32Array(DASHES), opacities = new Float32Array(DASHES);
+    piece.dashes.slice(0, DASHES).forEach((dash, i) => {
+      lengths[i] = parseFloat(style(dash).getPropertyValue("--ef-length")) || 0;
+      opacities[i] = parseFloat(style(dash).opacity) || 0;
+    });
+    piece.lengths = lengths;
+    piece.opacities = opacities;
+    piece.width = parseFloat(style(piece.dashes[0]).strokeWidth) || 1;
+    const route = piece.route, total = route.getTotalLength(), steps = Math.max(2, Math.ceil(total / 2));
+    const points = [];
+    for (let i = 0; i <= steps; i++) {
+      const s = total * i / steps, p = route.getPointAtLength(s);
+      points.push({ x: p.x, y: p.y, s });
+    }
+    const half = piece.width / 2, data = [];
+    points.forEach((p, i) => {
+      const a = points[Math.max(0, i - 1)], b = points[Math.min(points.length - 1, i + 1)];
+      const dx = b.x - a.x, dy = b.y - a.y, n = Math.hypot(dx, dy) || 1;
+      const nx = -dy / n * half, ny = dx / n * half;
+      data.push(p.x + nx, p.y + ny, p.s, p.x - nx, p.y - ny, p.s);
+    });
+    piece.buffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, piece.buffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(data), gl.STATIC_DRAW);
+    piece.count = points.length * 2;
+    piece.clip = null;
+    const shape = piece.clipHost && this.svg.getElementById(piece.clipHost.getAttribute("clip-path").match(/#([^)"']+)/)?.[1])?.firstElementChild;
+    if (shape) {
+      let corners;
+      if (shape.localName === "rect") {
+        const [x, y, w, h] = ["x", "y", "width", "height"].map((k) => parseFloat(shape.getAttribute(k)) || 0);
+        corners = [x, y, x + w, y, x + w, y + h, x, y + h];
+      } else {
+        corners = (shape.getAttribute("d").match(/-?\d*\.?\d+(?:e-?\d+)?/g) || []).slice(0, 8).map(Number);
+      }
+      // the clip's own frame, in the picture's units
+      const m = this.toPicture(piece.clipHost) || new DOMMatrix();
+      const out = [];
+      for (let i = 0; i < 8; i += 2) out.push(m.a * corners[i] + m.c * corners[i + 1] + m.e, m.b * corners[i] + m.d * corners[i + 1] + m.f);
+      // the shader wants the corners clockwise on screen (inside on the positive side of every edge)
+      let area = 0;
+      for (let i = 0; i < 8; i += 2) area += out[i] * out[(i + 3) % 8] - out[(i + 2) % 8] * out[i + 1];
+      if (area < 0) for (let i = 0; i < 4; i += 2) { const j = 6 - i; [out[i], out[j], out[i + 1], out[j + 1]] = [out[j], out[i], out[j + 1], out[i + 1]]; }
+      piece.clip = new Float32Array(out);
+    }
+  }
+
+  // An element's own units to the picture's (viewBox) units.
+  toPicture(el) {
+    const root = this.svg.getScreenCTM(), own = el.getScreenCTM();
+    if (!root || !own) return null;
+    return DOMMatrix.fromMatrix(root).inverse().multiply(DOMMatrix.fromMatrix(own));
+  }
+
+  // After each reading: which pieces run, which way, in what colour, on which beat.
+  update() {
+    if (this.failed) return;
+    const view = this.view, cd = view.cycleDistance;
+    for (const piece of this.pieces) {
+      const flow = piece.flow, way = flow.dataset.flow;
+      let shown = way !== "off" && !!cd;
+      for (let el = piece.group; shown && el && el !== this.svg; el = el.parentNode) if (getComputedStyle(el).display === "none") shown = false;
+      piece.shown = shown;
+      if (!shown) continue;
+      const turns = Number(flow.style.getPropertyValue("--ef-turns")) || 1;
+      piece.lead = way === "in" ? 0 : 1;
+      piece.direction = way === "in" ? 1 : -1;
+      piece.period = cd * turns;
+      piece.fixed = -(parseFloat(getComputedStyle(piece.dashes[0]).getPropertyValue("--ef-junction")) || 0)
+        + (Number(flow.style.getPropertyValue("--ef-turn")) || 0) * cd;
+      piece.color = this.rgb(getComputedStyle(piece.dashes[0]).stroke);
+      piece.matrix = this.toPicture(piece.group);
+      if (!piece.matrix) piece.shown = false;
+    }
+    if (!this.canvas.isConnected) {
+      const host = this.svg.parentNode;
+      if (getComputedStyle(host).position === "static") host.style.position = "relative";
+      if (getComputedStyle(this.svg).position === "static") this.svg.style.position = "relative";
+      this.svg.after(this.canvas);  // over the picture
+      this.resizer?.observe(this.svg);
+    }
+    this.place();
+    this.scheduleMasks();
+    this.sync();
+  }
+
+  rgb(color) {
+    this.ink ??= document.createElement("canvas").getContext("2d", { willReadFrequently: true });
+    const g = this.ink;
+    g.clearRect(0, 0, 1, 1);
+    g.fillStyle = "#000";
+    g.fillStyle = color;
+    g.fillRect(0, 0, 1, 1);
+    const [r, gr, b] = g.getImageData(0, 0, 1, 1).data;
+    return [r / 255, gr / 255, b / 255];
+  }
+
+  place() {
+    if (this.failed || !this.canvas.isConnected) return;
+    const size = fitCanvas(this.canvas, this.svg);
+    if (!size || (size.w === this.canvas.width && size.h === this.canvas.height)) return;
+    this.canvas.width = size.w;
+    this.canvas.height = size.h;
+    this.gl.viewport(0, 0, size.w, size.h);
+    this.maskKey = null;
+    this.scheduleMasks();
+    if (this.ready) this.draw(performance.now());
+  }
+
+  // The masks: for each depth, the alpha of everything the svg draws over its pulses (except other pulses, rain,
+  // snow and the labels, which never cover a pipe), over the area the pulses can reach. Drawn again when the look
+  // or the lanes change, or once a minute.
+  scheduleMasks() {
+    const lanes = [...this.svg.querySelectorAll(".ef-line")].map((l) => l.className.baseVal + l.style.transform).join();
+    const key = `${lookKey(this.svg)}|${lanes}|${this.canvas.width}`;
+    if (key === this.maskKey && performance.now() - this.maskAt < RESAMPLE) return;
+    this.maskKey = key;
+    clearTimeout(this.maskTimer);
+    this.maskTimer = setTimeout(() => this.drawMasks().catch(() => this.destroy()), this.ready ? MASK_WAIT : 0);
+  }
+
+  async drawMasks() {
+    if (this.failed || !this.canvas.width) return;
+    const box = this.box = PULSE_BOX, scale = this.canvas.width / 1170;
+    const width = Math.max(1, Math.round(box[2] * scale)), height = Math.max(1, Math.round(box[3] * scale));
+    const ids = (el) => { const all = [...this.svg.querySelectorAll("*")]; return all.indexOf(el); };
+    for (const level of this.levels) {
+      const clone = this.svg.cloneNode(true);
+      clone.classList.remove("ef-baked", "ef-gl", "ef-paused", "ef-still");
+      clone.style.removeProperty("position");
+      const all = [...clone.querySelectorAll("*")], first = all[ids(level.first)];
+      const drop = [], defs = clone.querySelector("defs");
+      const used = new Set([...clone.querySelectorAll("use")].map((u) => u.getAttribute("href")?.slice(1)));
+      for (const el of all) {
+        if (el.closest("defs, clipPath, mask, linearGradient, radialGradient, filter, pattern, style")) continue;
+        const position = el.compareDocumentPosition(first);
+        // before the pulses (and not holding any of them), or pulses themselves, or what never covers a pipe
+        if ((position & Node.DOCUMENT_POSITION_FOLLOWING && !(position & Node.DOCUMENT_POSITION_CONTAINED_BY)) || el === first
+          // (a pipe's body lies under its own pulses and never over another's)
+          || el.matches(".ef-flow, .ef-pulse, .ef-lane, #ef-rain, #ef-snow, #ef-labels, .ef-lead, #ef-flash")) drop.push(el);
+      }
+      // something a later <use> draws stays, out of sight in <defs>
+      for (const el of drop) { if (el.id && used.has(el.id) && !el.matches(".ef-flow, .ef-pulse")) defs.append(el); else el.remove(); }
+      clone.setAttribute("viewBox", box.join(" "));
+      clone.setAttribute("width", width);
+      clone.setAttribute("height", height);
+      const url = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(clone)], { type: "image/svg+xml" }));
+      try {
+        const image = new Image();
+        image.src = url;
+        await image.decode();
+        let source = image;
+        if (typeof createImageBitmap === "function") source = await createImageBitmap(image).catch(() => image);
+        if (this.failed) return;
+        const gl = this.gl;
+        level.texture ??= this.texture();
+        gl.bindTexture(gl.TEXTURE_2D, level.texture);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
+        source.close?.();
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+    }
+    this.maskAt = performance.now();
+    if (!this.ready) {
+      this.ready = true;
+      this.canvas.style.visibility = "inherit";
+      this.svg.classList.add("ef-gl");
+    }
+    this.draw(performance.now());
+    this.sync();
+  }
+
+  sync() {
+    if (!this.ready) return;
+    if (this.view.pulsesRun()) { if (!this.raf) this.raf = requestAnimationFrame(this.frame); }
+    else { cancelAnimationFrame(this.raf); this.raf = 0; this.draw(performance.now()); }
+  }
+
+  destroy() {
+    cancelAnimationFrame(this.raf);
+    clearTimeout(this.maskTimer);
+    this.failed = true;
+    this.svg.classList.remove("ef-gl");  // the svg's own pulses again
+    this.resizer?.disconnect();
+    this.canvas.remove();
+  }
+
+  draw(now) {
+    if (!this.ready) return;
+    const gl = this.gl, u = this.u, view = this.view;
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    const beat = (now - view.beatStart) * PULSE_SPEED / 1000;
+    gl.uniform1f(u.u_aa, 1170 / this.canvas.width);
+    gl.uniform4f(u.u_box, ...this.box);
+    gl.activeTexture(gl.TEXTURE0);
+    for (const piece of this.pieces) {
+      if (!piece.shown) continue;
+      let alpha = 1;
+      if (piece.line) {
+        // a lane that comes or goes fades and slides (CSS transitions): follow it while it moves
+        const moving = piece.line.getAnimations?.().length > 0;
+        if (moving || piece.moving) piece.matrix = this.toPicture(piece.group) || piece.matrix;
+        piece.moving = moving;
+        const ls = getComputedStyle(piece.line);
+        alpha = ls.visibility === "hidden" ? 0 : parseFloat(ls.opacity);
+        if (!alpha) continue;
+      }
+      const m = piece.matrix;
+      gl.uniformMatrix3fv(u.u_m, false, [m.a, m.b, 0, m.c, m.d, 0, m.e, m.f, 1]);
+      gl.uniform4fv(u.u_len, piece.lengths);
+      gl.uniform4fv(u.u_op, piece.opacities);
+      gl.uniform1f(u.u_lead, piece.lead);
+      gl.uniform1f(u.u_shift, piece.direction * (beat % piece.period) + piece.fixed);
+      gl.uniform1f(u.u_period, piece.period);
+      gl.uniform1f(u.u_alpha, alpha);
+      gl.uniform3fv(u.u_color, piece.color);
+      gl.uniform1f(u.u_clipOn, piece.clip ? 1 : 0);
+      if (piece.clip) gl.uniform2fv(u.u_clip, piece.clip);
+      gl.bindTexture(gl.TEXTURE_2D, piece.level.texture || this.blank);
+      gl.bindBuffer(gl.ARRAY_BUFFER, piece.buffer);
+      gl.enableVertexAttribArray(this.a.pos);
+      gl.vertexAttribPointer(this.a.pos, 2, gl.FLOAT, false, 12, 0);
+      gl.enableVertexAttribArray(this.a.s);
+      gl.vertexAttribPointer(this.a.s, 1, gl.FLOAT, false, 12, 8);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, piece.count);
+    }
+  }
+}
+
 export class EnergyFlowView {
   constructor(container, svgText) {
     container.innerHTML = svgText;
@@ -358,6 +725,16 @@ export class EnergyFlowView {
     this.contrastDirty = false;
 
     const svg = this.svg;
+    // Flows drawn as <use> copies of a shared pulse (the house lanes) become real copies, so that every dash is an
+    // element of its own that the pulse renderer can measure.
+    for (const use of [...svg.querySelectorAll("use.ef-flow")]) {
+      const flow = document.createElementNS("http://www.w3.org/2000/svg", "g");
+      for (const { name, value } of use.attributes) if (name !== "href") flow.setAttribute(name, value);
+      const pulse = this.part(use.getAttribute("href").slice(1)).cloneNode(true);
+      pulse.removeAttribute("id");
+      flow.append(pulse);
+      use.replaceWith(flow);
+    }
     for (const lane of svg.querySelectorAll("[data-route]")) {
       // The grid can carry several pulses. It follows the beat set by the shorter wires.
       if (lane.id.startsWith("ef-f-grid")) continue;
@@ -385,6 +762,12 @@ export class EnergyFlowView {
     document.removeEventListener("visibilitychange", this.onVisibility);
     this.observer?.disconnect();
     this.shimmer?.destroy();
+    this.pulses?.destroy();
+  }
+
+  // Whether anything in the picture may move now.
+  pulsesRun() {
+    return !this.svg.classList.contains("ef-paused") && !matchMedia("(prefers-reduced-motion: reduce)").matches;
   }
 
   part(id) { return this.svg.getElementById(id); }
@@ -639,6 +1022,9 @@ export class EnergyFlowView {
     this.attr(this.svg, "data-weather", PICTURE_WEATHER[weather]);
     this.updateSky(state.sky, weather);
     this.temperature(state.temperature);
+    // The pulses on the GPU where the browser can; otherwise the svg's own stay.
+    this.pulses ??= typeof WebGLRenderingContext === "function" ? new PulseRenderer(this) : null;
+    this.pulses?.update();
 
     if (this.svg.classList.contains("ef-still")) {
       this.svg.getBoundingClientRect();  // lays the lanes out where they are before transitions are switched on
@@ -665,6 +1051,7 @@ export class EnergyFlowView {
   restWhenUnseen() {
     this.svg.classList.toggle("ef-paused", !this.seen || document.hidden);
     this.shimmer?.sync();
+    this.pulses?.sync();
     this.alignBeats();
     this.scheduleLabelContrast();
   }
