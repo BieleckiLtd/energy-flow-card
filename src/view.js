@@ -8,7 +8,7 @@ const LANE_GAP = 19;  // between neighbouring lanes on the wall, in the picture'
 const MOON_RADIUS = 22;
 const HORIZON = -.27;  // the apparent centre is just below the horizon when the upper edge rises
 const GRID_FLOWS = ["grid", "grid2", "grid3"];
-const HOT = 30;  // °C: above this heat haze rises off the roofs
+const HOT = 30;  // °C: above this the air shimmers
 const FROST_START = 3;  // °C: frost begins to form here...
 const FROST_FULL = -10;  // ...and is fully grown here
 
@@ -86,6 +86,245 @@ function colorVars(cfg) {
   return vars;
 }
 
+// Heat shimmer. The SVG displacement filter this replaces ran at about 1 fps on an iPhone: Safari computes SVG
+// filters on the CPU, at full screen density, on every frame. Here the picture's still parts (.ef-bake) are
+// rasterized onto a canvas behind it, and a fragment shader bends them through rising noise on the GPU. The picture
+// hides its own copies of those parts (.ef-baked) only once the canvas shows them; everything that moves stays live
+// on top. The snapshot is taken again when the still parts change (sky, sun, colours) and cross-faded in.
+const SHIMMER_VERTEX = "attribute vec2 a;varying vec2 v;void main(){v=vec2(a.x*.5+.5,.5-a.y*.5);gl_Position=vec4(a,0.,1.);}";
+const SHIMMER_FRAGMENT = `precision highp float;
+varying vec2 v;
+uniform sampler2D u_a,u_b;
+uniform float u_mix,u_t,u_scale;
+const vec2 SIZE=vec2(1170.,1408.);
+vec2 hash(vec2 p){p=vec2(dot(p,vec2(127.1,311.7)),dot(p,vec2(269.5,183.3)));return fract(sin(p)*43758.5453)*2.-1.;}
+float noise(vec2 p){vec2 i=floor(p),f=fract(p),u=f*f*(3.-2.*f);
+  return mix(mix(dot(hash(i),f),dot(hash(i+vec2(1.,0.)),f-vec2(1.,0.)),u.x),
+             mix(dot(hash(i+vec2(0.,1.)),f-vec2(0.,1.)),dot(hash(i+vec2(1.,1.)),f-vec2(1.,1.)),u.x),u.y);}
+float fbm(vec2 p){return noise(p)+.5*noise(p*2.+vec2(17.3,5.9));}
+void main(){
+  vec2 p=v*SIZE;
+  float fade=1.-clamp((p.y-560.)/200.,0.,1.);  // only the sky and roofs shimmer: from the eaves down it fades out
+  vec2 d=vec2(0.);
+  if(fade>0.){
+    vec2 q=vec2(p.x*.011,(p.y+u_t*75.)*.042);  // stretched sideways, rising 75 units a second
+    d=u_scale*.5*fade*vec2(fbm(q),fbm(q+vec2(31.7,11.1)));
+  }
+  vec2 uv=clamp((p+d)/SIZE,0.,1.);
+  gl_FragColor=mix(texture2D(u_a,uv),texture2D(u_b,uv),u_mix);
+}`;
+const SHIMMER_FADE = 600;  // ms to cross-fade a new snapshot in
+
+class HeatShimmer {
+  constructor(svg) {
+    this.svg = svg;
+    this.scale = 3;
+    this.markup = null;
+    this.busy = false;
+    this.dirty = false;
+    this.shown = false;
+    this.raf = 0;
+    this.fadeStart = -1;
+    const canvas = this.canvas = document.createElement("canvas");
+    canvas.setAttribute("aria-hidden", "true");
+    canvas.style.cssText = "position:absolute;pointer-events:none;visibility:hidden";  // laid out even while hidden
+    const gl = this.gl = canvas.getContext("webgl", { alpha: false, antialias: false, depth: false, stencil: false });
+    if (!gl || !this.build()) { this.failed = true; return; }
+    canvas.addEventListener("webglcontextlost", (e) => { e.preventDefault(); this.destroy(); });
+    this.frame = (now) => {
+      this.raf = 0;
+      this.draw(now);
+      if (this.running()) this.raf = requestAnimationFrame(this.frame);
+    };
+    this.resizer = typeof ResizeObserver === "function" ? new ResizeObserver(() => this.place()) : null;
+  }
+
+  build() {
+    const gl = this.gl;
+    const shader = (type, source) => {
+      const s = gl.createShader(type);
+      gl.shaderSource(s, source);
+      gl.compileShader(s);
+      return gl.getShaderParameter(s, gl.COMPILE_STATUS) ? s : null;
+    };
+    const vs = shader(gl.VERTEX_SHADER, SHIMMER_VERTEX), fs = shader(gl.FRAGMENT_SHADER, SHIMMER_FRAGMENT);
+    if (!vs || !fs) return false;
+    const program = gl.createProgram();
+    gl.attachShader(program, vs);
+    gl.attachShader(program, fs);
+    gl.linkProgram(program);
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) return false;
+    gl.useProgram(program);
+    gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+    const a = gl.getAttribLocation(program, "a");
+    gl.enableVertexAttribArray(a);
+    gl.vertexAttribPointer(a, 2, gl.FLOAT, false, 0, 0);
+    this.u = Object.fromEntries(["u_a", "u_b", "u_mix", "u_t", "u_scale"].map((n) => [n, gl.getUniformLocation(program, n)]));
+    gl.uniform1i(this.u.u_a, 0);
+    gl.uniform1i(this.u.u_b, 1);
+    this.textures = [0, 1].map(() => {
+      const t = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, t);
+      for (const p of [gl.TEXTURE_WRAP_S, gl.TEXTURE_WRAP_T]) gl.texParameteri(gl.TEXTURE_2D, p, gl.CLAMP_TO_EDGE);
+      for (const p of [gl.TEXTURE_MIN_FILTER, gl.TEXTURE_MAG_FILTER]) gl.texParameteri(gl.TEXTURE_2D, p, gl.LINEAR);
+      return t;
+    });
+    return true;
+  }
+
+  // Shown above HOT; scale is how far the air bends the picture, in its own units.
+  show(scale) {
+    if (this.failed) return;
+    this.scale = scale;
+    if (!this.canvas.isConnected) {
+      const host = this.svg.parentNode;
+      if (getComputedStyle(host).position === "static") host.style.position = "relative";
+      if (getComputedStyle(this.svg).position === "static") this.svg.style.position = "relative";  // stays above the canvas
+      host.insertBefore(this.canvas, this.svg);
+      this.resizer?.observe(this.svg);
+    }
+    this.place();
+    this.refresh();
+  }
+
+  hide() {
+    cancelAnimationFrame(this.raf);
+    this.raf = 0;
+    this.shown = false;
+    this.markup = null;
+    this.fadeStart = -1;
+    this.svg.classList.remove("ef-baked");
+    this.canvas.style.visibility = "hidden";
+  }
+
+  destroy() {
+    this.hide();
+    this.failed = true;
+    this.resizer?.disconnect();
+    this.canvas.remove();
+  }
+
+  running() {
+    return this.shown && !this.svg.classList.contains("ef-paused") && !matchMedia("(prefers-reduced-motion: reduce)").matches;
+  }
+
+  // Lines the canvas up with the picture's drawing area inside the svg box.
+  place() {
+    if (this.failed || !this.canvas.isConnected) return;
+    const parent = this.canvas.offsetParent;
+    if (!parent) return;
+    const box = this.svg.getBoundingClientRect(), host = parent.getBoundingClientRect();
+    if (!box.width || !box.height) return;
+    let width = box.width, height = box.height;
+    let left = box.left - host.left - parent.clientLeft, top = box.top - host.top - parent.clientTop;
+    if (width / height > 1170 / 1408) { left += (width - height * 1170 / 1408) / 2; width = height * 1170 / 1408; }
+    else { top += (height - width * 1408 / 1170) / 2; height = width * 1408 / 1170; }
+    Object.assign(this.canvas.style, { left: `${left}px`, top: `${top}px`, width: `${width}px`, height: `${height}px` });
+    const density = Math.min(devicePixelRatio || 1, 2048 / width);
+    const w = Math.round(width * density), h = Math.round(height * density);
+    if (w !== this.canvas.width || h !== this.canvas.height) {
+      this.canvas.width = w;
+      this.canvas.height = h;
+      this.gl.viewport(0, 0, w, h);
+      if (this.shown) { this.markup = null; this.refresh(); }
+    }
+  }
+
+  // The still parts alone, as they look now, at the canvas's size.
+  stillMarkup() {
+    const clone = this.svg.cloneNode(true);
+    clone.classList.remove("ef-baked", "ef-paused", "ef-still");
+    clone.style.removeProperty("position");
+    const scene = clone.querySelector("#ef-scene");
+    for (const el of [...scene.children]) if (!el.classList.contains("ef-bake")) el.remove();
+    for (const el of [...clone.children]) if (el.localName !== "defs" && el !== scene) el.remove();
+    clone.setAttribute("width", this.canvas.width);
+    clone.setAttribute("height", this.canvas.height);
+    return new XMLSerializer().serializeToString(clone);
+  }
+
+  // A new snapshot, once things settle, if the still parts look any different.
+  refresh() {
+    if (this.failed || !this.canvas.width) return;
+    this.dirty = true;
+    if (this.busy || (this.shown && !this.running())) return;
+    this.busy = true;
+    setTimeout(async () => {
+      try {
+        while (this.dirty && !this.failed && this.svg.classList.contains("ef-hot")) {
+          this.dirty = false;
+          const markup = this.stillMarkup();
+          if (markup === this.markup) continue;
+          const url = URL.createObjectURL(new Blob([markup], { type: "image/svg+xml" }));
+          try {
+            const image = new Image();
+            image.src = url;
+            await image.decode();
+            if (this.failed || !this.svg.classList.contains("ef-hot")) break;
+            this.upload(image);
+            this.markup = markup;
+          } finally {
+            URL.revokeObjectURL(url);
+          }
+        }
+      } catch {
+        this.destroy();  // no shimmer where the browser cannot rasterize the picture; it keeps its own still parts
+      } finally {
+        this.busy = false;
+      }
+    }, 250);
+  }
+
+  upload(image) {
+    const gl = this.gl;
+    if (!this.shown) {
+      gl.bindTexture(gl.TEXTURE_2D, this.textures[0]);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+      this.shown = true;
+      this.canvas.style.visibility = "inherit";  // hidden with its host
+      this.draw(performance.now());
+      this.svg.classList.add("ef-baked");
+    } else {
+      if (this.fadeStart >= 0) this.draw(this.fadeStart + SHIMMER_FADE);  // finish the previous cross-fade first
+      gl.bindTexture(gl.TEXTURE_2D, this.textures[1]);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+      this.fadeStart = performance.now();
+    }
+    this.sync();
+  }
+
+  // The air moves only while the picture is on screen.
+  sync() {
+    if (!this.shown) return;
+    if (this.running()) {
+      if (!this.raf) this.raf = requestAnimationFrame(this.frame);
+      if (this.dirty) this.refresh();
+    } else {
+      cancelAnimationFrame(this.raf);
+      this.raf = 0;
+      if (this.fadeStart >= 0) this.draw(this.fadeStart + SHIMMER_FADE);
+    }
+  }
+
+  draw(now) {
+    const gl = this.gl, u = this.u;
+    let blend = 0;
+    if (this.fadeStart >= 0) {
+      blend = Math.min(1, (now - this.fadeStart) / SHIMMER_FADE);
+      if (blend >= 1) { this.textures.reverse(); this.fadeStart = -1; blend = 0; }
+    }
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.textures[0]);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, this.textures[1]);
+    gl.uniform1f(u.u_mix, blend);
+    gl.uniform1f(u.u_t, (now / 1000) % 600);
+    gl.uniform1f(u.u_scale, this.scale);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  }
+}
+
 export class EnergyFlowView {
   constructor(container, svgText) {
     container.innerHTML = svgText;
@@ -127,6 +366,7 @@ export class EnergyFlowView {
   destroy() {
     document.removeEventListener("visibilitychange", this.onVisibility);
     this.observer?.disconnect();
+    this.shimmer?.destroy();
   }
 
   part(id) { return this.svg.getElementById(id); }
@@ -313,7 +553,7 @@ export class EnergyFlowView {
 
   // Readings in watts: solar, home, grid (+ import, − export), battery1/battery2 { power (+ gives out, − charges), soc }.
   // weather is one of WEATHERS; sky is energySky()'s result, or null for a plain daytime sky; time (ms) is the moment
-  // shown, for the seasonal decorations; temperature (°C) brings heat haze or frost.
+  // shown, for the seasonal decorations; temperature (°C) brings heat shimmer or frost.
   update(state) {
     const cfg = this.cfg, color = this.colors;
     const b1 = cfg.battery1.show ? state.battery1 || {} : {}, b2 = cfg.battery2.show ? state.battery2 || {} : {};
@@ -387,18 +627,24 @@ export class EnergyFlowView {
     this.scheduleLabelContrast();
   }
 
-  // Air temperature in °C, or nothing. The haze grows stronger up to 40 °C.
+  // Air temperature in °C, or nothing. The shimmer grows a little stronger with the heat.
   temperature(celsius) {
     const hot = !missing(celsius) && celsius > HOT;
     this.svg.classList.toggle("ef-hot", hot);
     const frost = missing(celsius) ? 0 : Math.max(0, Math.min(1, (FROST_START - celsius) / (FROST_START - FROST_FULL)));
     this.svg.classList.toggle("ef-frosty", frost > 0);
     this.svg.style.setProperty("--ef-frost", frost.toFixed(2));
-    if (hot) this.svg.style.setProperty("--ef-heat", Math.min(1, (celsius - HOT) / 10).toFixed(2));
+    if (hot && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      this.shimmer ??= new HeatShimmer(this.svg);
+      this.shimmer.show(Math.min(8, 3 + (celsius - HOT) * .4));
+    } else {
+      this.shimmer?.hide();
+    }
   }
 
   restWhenUnseen() {
     this.svg.classList.toggle("ef-paused", !this.seen || document.hidden);
+    this.shimmer?.sync();
     this.alignBeats();
     this.scheduleLabelContrast();
   }
@@ -431,6 +677,7 @@ export class EnergyFlowView {
     const svg = this.svg;
     const scene = svg.cloneNode(true);
     scene.querySelector("#ef-labels").remove();
+    scene.classList.remove("ef-baked");  // the still parts the shimmer canvas draws are background too
     const drift = scene.querySelector("#ef-drift");
     drift.style.animation = "none";
     drift.style.transform = getComputedStyle(this.part("ef-drift")).transform;
