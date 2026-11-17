@@ -718,9 +718,9 @@ class PulseRenderer {
 // answer are remembered on the device. "high", "medium" and "low" fix the level for every device.
 export const EFFECTS = ["auto", "high", "medium", "low"];
 const LEVELS = {
-  high: { cap: Infinity, shimmer: true, label: "High", about: "Everything, as sharp as the screen allows" },
-  medium: { cap: 1.5, shimmer: true, label: "Medium", about: "Slightly softer pulses, half the rain and snow" },
-  low: { cap: 1, shimmer: false, label: "Low", about: "Softer pulses, little rain or snow, no heat haze" },
+  high: { cap: Infinity, shimmer: true, label: "High" },
+  medium: { cap: 1.5, shimmer: true, label: "Medium" },
+  low: { cap: 1, shimmer: false, label: "Low" },
 };
 const OLD_EFFECTS = { full: "high", reduced: "low" };  // the names in 0.4.0
 export const effectsLevel = (value) => OLD_EFFECTS[value] ?? (EFFECTS.includes(value) ? value : "auto");
@@ -920,27 +920,27 @@ export class EnergyFlowView {
       if (text) e.textContent = text;
       return e;
     };
-    const offer = this.offer = el("div", "position:absolute;left:50%;top:12px;transform:translateX(-50%);z-index:2;"
-      + "width:min(330px,calc(100% - 24px));box-sizing:border-box;padding:14px 16px 12px;border-radius:14px;"
-      + "background:rgba(18,19,21,.94);color:#f1f1f1;font:13px/1.35 system-ui,-apple-system,sans-serif;"
-      + "text-align:left;box-shadow:0 4px 18px rgba(0,0,0,.5)");
+    const offer = this.offer = el("div", "position:absolute;left:50%;top:10px;transform:translateX(-50%);z-index:2;"
+      + "width:max-content;max-width:calc(100% - 20px);box-sizing:border-box;padding:9px 10px 9px 14px;border-radius:14px;"
+      + "background:rgba(18,19,21,.92);color:#f1f1f1;font:13px/1.3 system-ui,-apple-system,sans-serif;"
+      + "text-align:left;box-shadow:0 3px 14px rgba(0,0,0,.45)");
     offer.setAttribute("role", "dialog");
     offer.setAttribute("aria-label", "Animation detail");
-    offer.append(el("div", "margin:0 0 8px", "The animation appears choppy on this device. Would you like to try less detail?"));
+    offer.append(el("div", "margin:0 0 6px", "Animation looks choppy. Try less detail?"));
+    const row = el("div", "display:flex;align-items:center;gap:12px;white-space:nowrap");
     const name = "ef-detail-" + Math.random().toString(36).slice(2);
     for (const level of ["high", "medium", "low"]) {
-      const row = el("label", "display:flex;gap:10px;align-items:flex-start;padding:5px 0;cursor:pointer");
-      const radio = el("input", "margin:2px 0 0;accent-color:#f1f1f1;flex:none;width:16px;height:16px");
+      const option = el("label", "display:flex;align-items:center;gap:5px;cursor:pointer");
+      const radio = el("input", "margin:0;accent-color:#f1f1f1;width:15px;height:15px");
       Object.assign(radio, { type: "radio", name, value: level, checked: level === "medium" });
-      const text = el("span");
-      text.append(el("b", "font-weight:600", LEVELS[level].label), el("span", "display:block;color:#b4b4b4", LEVELS[level].about));
-      row.append(radio, text);
-      offer.append(row);
+      option.append(radio, LEVELS[level].label);
+      row.append(option);
     }
-    const ok = el("button", "display:block;margin:6px 0 0 auto;border:0;border-radius:14px;padding:7px 22px;"
+    const ok = el("button", "margin-left:4px;border:0;border-radius:12px;padding:5px 16px;"
       + "font:inherit;font-weight:600;cursor:pointer;background:#f1f1f1;color:#111", "OK");
     ok.type = "button";
-    offer.append(ok);
+    row.append(ok);
+    offer.append(row);
     // its own taps: not a tap on the picture
     for (const type of ["click", "pointerdown", "pointerup", "mousedown", "mouseup", "touchstart", "touchend"]) {
       offer.addEventListener(type, (e) => e.stopPropagation());

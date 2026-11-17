@@ -32,22 +32,22 @@
 
   const state = {
     place: "london", latitude: 51.5072, longitude: -0.1276, zone: "Europe/London",
-    date: today(), minute: 720, weather: "clear", temperature: 15,
+    date: today(), minute: 720, weather: "clear", temperature: 15, effects: "auto",
     power: { solar: 2.2, b1: 0, b2: 0, grid: 0, home: 2.2, b1soc: 64, b2soc: 48 }, balance: true,
     config: clone(DEFAULT_CONFIG),
   };
   try {
     const saved = JSON.parse(localStorage.getItem(STORE) || "null");
     if (saved) {
-      for (const k of ["place", "latitude", "longitude", "zone", "weather", "temperature", "balance"]) if (k in saved) state[k] = saved[k];
+      for (const k of ["place", "latitude", "longitude", "zone", "weather", "temperature", "balance", "effects"]) if (k in saved) state[k] = saved[k];
       Object.assign(state.power, saved.power || {});
       for (const part of Object.keys(DEFAULT_CONFIG)) Object.assign(state.config[part], saved.config?.[part] || {});
     }
   } catch { /* a private window: start fresh */ }
   const save = () => {
     try {
-      const { place, latitude, longitude, zone, weather, temperature, balance, power, config } = state;
-      localStorage.setItem(STORE, JSON.stringify({ place, latitude, longitude, zone, weather, temperature, balance, power, config }));
+      const { place, latitude, longitude, zone, weather, temperature, balance, power, config, effects } = state;
+      localStorage.setItem(STORE, JSON.stringify({ place, latitude, longitude, zone, weather, temperature, balance, power, config, effects }));
     } catch { /* not kept, still works */ }
   };
 
@@ -98,7 +98,7 @@
   const names = () => ({ b1: state.config.battery1.name, b2: state.config.battery2.name, solar: state.config.solar.name, grid: state.config.grid.name });
 
   function cardConfig() {
-    return { preview: true, ...clone(state.config) };
+    return { preview: true, ...clone(state.config), effects: state.effects };
   }
 
   function balance() {
@@ -131,6 +131,7 @@
       weather: state.weather, temperature: state.temperature, sky, time: instant,
     });
     for (const b of $("weather").children) b.setAttribute("aria-pressed", b.dataset.key === state.weather);
+    for (const b of $("effects").children) b.setAttribute("aria-pressed", b.dataset.key === state.effects);
     $("temperature").value = state.temperature;
     $("temperature-out").textContent = `${state.temperature} °C`;
     syncPower();
@@ -194,6 +195,14 @@
     b.dataset.key = key;
     b.onclick = () => { state.weather = key; render(); };
     $("weather").append(b);
+  }
+  for (const [key, label] of [["auto", "Auto"], ["high", "High"], ["medium", "Medium"], ["low", "Low"]]) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = label;
+    b.dataset.key = key;
+    b.onclick = () => { state.effects = key; card.setConfig(cardConfig()); render(); };
+    $("effects").append(b);
   }
   $("temperature").addEventListener("input", () => { state.temperature = +$("temperature").value; render(); });
 
@@ -472,6 +481,7 @@
   function yaml() {
     const c = state.config, d = DEFAULT_CONFIG;
     const lines = ["type: custom:energy-flow-card", "weather: weather.forecast_home"];
+    if (state.effects !== "auto") lines.push(`effects: ${state.effects}`);
     const block = (key, entities) => {
       const out = [`${key}:`, ...entities.map(([k, v]) => `  ${k}: ${v}`)];
       for (const prop of ["name", "color", "face"]) {

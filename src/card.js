@@ -259,7 +259,7 @@ const LABELS = {
 };
 const HELPERS = {
   temperature: "Above 30 °C the air shimmers; below 3 °C frost grows, fully at -10 °C. Without a sensor the weather entity's temperature is used.",
-  effects: "Medium: slightly softer pulses, half the rain and snow. Low: soft pulses, a quarter of the rain and snow, no heat haze. Auto watches the animation and asks on a device where it is choppy; the answer is kept on that device.",
+  effects: "Auto asks on a device where the animation is choppy, and keeps the answer there.",
   invert: "Grid: + is import. Batteries: + is discharging. Turn on if your sensor uses the other sign.",
 };
 
