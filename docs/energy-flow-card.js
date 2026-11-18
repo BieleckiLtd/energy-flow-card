@@ -298,8 +298,8 @@ class HeatShimmer {
     this.scale = scale;
     if (!this.canvas.isConnected) {
       const host = this.svg.parentNode;
-      if (getComputedStyle(host).position === "static") host.style.position = "relative";
-      if (getComputedStyle(this.svg).position === "static") this.svg.style.position = "relative";  // stays above the canvas
+      positioned(host);
+      positioned(this.svg);  // stays above the canvas
       host.insertBefore(this.canvas, this.svg);
       this.resizer?.observe(this.svg);
     }
@@ -449,6 +449,13 @@ class HeatShimmer {
 
 // Lines a canvas up with the picture's drawing area inside the svg box; returns its size in device pixels, at
 // most cap pixels per CSS pixel.
+// An element that what is laid over it is placed against. Home Assistant makes a card (and the first readings go in)
+// before it is on the page, when nothing has a computed position yet: anything but a known one counts as static.
+// Otherwise the canvases are placed against some element outside the card and stay behind when the card moves.
+function positioned(el) {
+  if (!/^(relative|absolute|fixed|sticky)$/.test(getComputedStyle(el).position)) el.style.position = "relative";
+}
+
 function fitCanvas(canvas, svg, cap = Infinity) {
   const parent = canvas.offsetParent;
   if (!parent) return null;
@@ -664,7 +671,7 @@ class PulseRenderer {
 
   // After each reading: which pieces run, which way, in what colour, on which beat.
   update() {
-    if (this.failed) return;
+    if (this.failed || !this.svg.isConnected) return;  // off the page nothing has a computed style to read
     const view = this.view, cd = view.cycleDistance, svg = this.svg;
     // Computed styles are read only for pieces whose flow, colours or lane changed: after the readings went in,
     // the first such read makes the browser restyle the whole picture, which on a tablet took ~350 ms every poll
@@ -694,8 +701,8 @@ class PulseRenderer {
     }
     if (!this.canvas.isConnected) {
       const host = this.svg.parentNode;
-      if (getComputedStyle(host).position === "static") host.style.position = "relative";
-      if (getComputedStyle(this.svg).position === "static") this.svg.style.position = "relative";
+      positioned(host);
+      positioned(this.svg);
       this.svg.after(this.canvas);  // over the picture
       this.resizer?.observe(this.svg);
     }
@@ -1125,7 +1132,7 @@ class EnergyFlowView {
       remember({ level });
     });
     const host = this.svg.parentNode;
-    if (getComputedStyle(host).position === "static") host.style.position = "relative";
+    positioned(host);
     host.append(offer);
     this.trial = "medium";
     this.applyEffects();
@@ -1167,8 +1174,7 @@ class EnergyFlowView {
     }
     ok.addEventListener("click", () => remember({ motionHintSeen: true }));
     const host = this.svg.parentNode;
-    // shown as the card is made, before it is on the page and has a computed position
-    if (!/^(relative|absolute|fixed|sticky)$/.test(getComputedStyle(host).position)) host.style.position = "relative";
+    positioned(host);
     host.append(hint);
   }
 
@@ -1396,7 +1402,9 @@ class EnergyFlowView {
     this.updateSky(state.sky, weather);
     this.temperature(state.temperature);
     // The pulses on the GPU where the browser can; otherwise the svg's own stay.
-    this.pulses ??= typeof WebGLRenderingContext === "function" ? new PulseRenderer(this) : null;
+    // Made once the picture is on the page: Home Assistant sends the first readings before that, when the dashes have
+    // no computed lengths, opacities or colours yet and the pulses would be measured as nothing (issue #1).
+    if (this.svg.isConnected) this.pulses ??= typeof WebGLRenderingContext === "function" ? new PulseRenderer(this) : null;
     this.pulses?.update();
     // A new look (weather, heat) is judged afresh.
     const look = lookKey(this.svg);
@@ -1586,6 +1594,7 @@ class EnergyFlowCard extends HTMLElement {
       card.replaceWith(haCard);
     }
     if (this._hass) this.startClock();
+    this.render();  // the readings that came in before it was on the page: now the pulses can be measured
   }
 
   disconnectedCallback() {

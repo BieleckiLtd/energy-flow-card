@@ -72,6 +72,7 @@ export class EnergyFlowCard extends HTMLElement {
       card.replaceWith(haCard);
     }
     if (this._hass) this.startClock();
+    this.render();  // the readings that came in before it was on the page: now the pulses can be measured
   }
 
   disconnectedCallback() {
