@@ -1,7 +1,7 @@
 // The Home Assistant card: <energy-flow-card>, a Lovelace custom card. It reads power sensors, a weather entity
 // and Home Assistant's location, and draws them with EnergyFlowView. The lab page drives the same element
 // through preview(), without Home Assistant.
-import { EnergyFlowView, DEFAULTS, WEATHERS, effectsLevel, validColor } from "./view.js";
+import { EnergyFlowView, DEFAULTS, WEATHERS, effectsLevel, validColor, christmasSeason } from "./view.js";
 import { energySky } from "./sky.js";
 import { SVG, VERSION } from "./svg.js";
 
@@ -12,12 +12,23 @@ const HA_WEATHER = {
   "snowy-rainy": "rain", windy: "partly", "windy-variant": "cloudy", exceptional: "cloudy",
 };
 const PARTS = ["solar", "home", "grid", "battery1", "battery2", "ev"];
+const isEntity = (v) => typeof v === "string" && /^[a-z_]+\.[\w-]+$/i.test(v.trim());
+// Entity states that count as open (the garage) or on (the lights). A cover still opening is drawn shut: its shutter
+// rolls up, and the car's pulses start, once it is all the way open; closing, it comes down at once.
+const OPEN = ["open", "on"], ON = ["on", "open"];
 
 // The config as written (YAML or the editor) -> every option filled in. A part given as a plain string is its entity.
+// festive: an easter egg, not in the editor or the README. Decorations from 6 December to 6 January, on unless
+// festive (or christmas, its name before 0.8) is false.
 export function normalizeConfig(config = {}) {
   const out = { title: config.title || "", weather: config.weather || "", temperature: config.temperature || "", latitude: config.latitude, longitude: config.longitude,
-    christmas: config.christmas !== false, effects: effectsLevel(config.effects),
-    garage: config.garage === "open" || config.garage === true ? "open" : "closed" };
+    festive: (config.festive ?? config.christmas) !== false, effects: effectsLevel(config.effects),
+    // The garage and the house lights: on or off, or an entity (a cover, switch or light) that says which and that a
+    // tap on the shutter or the window toggles. Without one a tap toggles the picture alone.
+    garage: [true, 1, "1", "open", "on"].includes(config.garage) ? "open" : "closed",
+    garageEntity: isEntity(config.garage) ? config.garage.trim() : "",
+    lights: [false, 0, "0", "off", "closed"].includes(config.lights) ? "off" : "on",
+    lightsEntity: isEntity(config.lights) ? config.lights.trim() : "" };
   for (const key of PARTS) {
     let c = config[key];
     if (typeof c === "string") c = { entity: c };
@@ -28,13 +39,14 @@ export function normalizeConfig(config = {}) {
     const part = { ...DEFAULTS[key], ...c };
     for (const k of ["color", "face"]) if (part[k] && !validColor(part[k])) part[k] = DEFAULTS[key][k];
     if ("show" in DEFAULTS[key]) {
-      // Battery 2 is on unless switched off; solar shows once it has a sensor. Battery 1 is always there.
+      // The batteries are on unless switched off; solar shows once it has a sensor.
       const hasEntity = !!(c.entity || c.power || c.soc || c.charge || c.discharge);
-      part.show = c.show ?? (config.preview || key === "battery2" ? true : hasEntity);
+      part.show = c.show ?? (config.preview || key.startsWith("battery") ? true : hasEntity);
     }
     out[key] = part;
   }
   // Home's other loads, listed above its label: each a sensor (a plain entity id is fine), with an optional name.
+  if (!out.battery1.show) out.battery2.show = false;  // battery 2 only alongside battery 1
   out.home.extras = (Array.isArray(out.home.extras) ? out.home.extras : [])
     .map((e) => (typeof e === "string" ? { entity: e } : { ...(e || {}) }))
     .filter((e) => e.entity || e.name);
@@ -44,6 +56,7 @@ export function normalizeConfig(config = {}) {
 }
 
 const UNIT = { w: 1, kw: 1000, mw: 1e6 };
+const RELEASE_AFTER = 10000;  // ms off the page before a card counts as thrown away
 
 export class EnergyFlowCard extends HTMLElement {
   constructor() {
@@ -63,6 +76,9 @@ export class EnergyFlowCard extends HTMLElement {
     this.titleEl = this.shadowRoot.querySelector(".title");
     this.view = new EnergyFlowView(this.picture, SVG);
     this.view.part("ef-labels").addEventListener("click", (e) => this.openMoreInfo(e));
+    this.view.part("ef-tap-garage").addEventListener("click", () => this.toggle("garage"));
+    this.view.part("ef-tap-window").addEventListener("click", () => this.tapWindow());
+    this.local = {};
     this.config = normalizeConfig({});
   }
 
@@ -75,19 +91,27 @@ export class EnergyFlowCard extends HTMLElement {
       haCard.append(...card.childNodes);
       card.replaceWith(haCard);
     }
+    clearTimeout(this.leaving);
     if (this._hass) this.startClock();
+    if (this.view.suspended) { this.view.resume(); this.render(); }
     this.render();  // the readings that came in before it was on the page: now the pulses can be measured
   }
 
   disconnectedCallback() {
     clearInterval(this.clock);
     this.clock = null;
+    this.view.suspend();
+    // Moved on the dashboard or back on a view switch, it carries on as it was. Still off the page after a while, it
+    // was thrown away (the editor makes cards anew): its GPU memory goes at once, which older devices need.
+    clearTimeout(this.leaving);
+    this.leaving = setTimeout(() => { if (!this.isConnected) this.view.release(); }, RELEASE_AFTER);
   }
 
   setConfig(config) {
     if (!config || typeof config !== "object") throw new Error("Invalid configuration");
     this.rawConfig = config;
     this.config = normalizeConfig(config);
+    this.local = {};  // taps without an entity last until the config changes
     this.titleEl.textContent = this.config.title;
     this.titleEl.hidden = !this.config.title;
     this.picture.style.background = this.config.look.background;
@@ -112,6 +136,39 @@ export class EnergyFlowCard extends HTMLElement {
   startClock() {
     clearInterval(this.clock);
     this.clock = setInterval(() => this.render(), 60000);
+  }
+
+  // Garage open, lights on: the entity's state if there is one, else a tap's, else the config's.
+  switchedOn(part) {
+    const entity = this.config[`${part}Entity`], s = entity && this._hass?.states[entity]?.state;
+    if (entity && s !== undefined && !this.previewState) return (part === "garage" ? OPEN : ON).includes(s);
+    return this.local[part] ?? (part === "garage" ? this.config.garage === "open" : this.config.lights === "on");
+  }
+
+  // A tap on the shutter or the window: the entity toggles in Home Assistant, or the picture alone. The lab hears it
+  // as an energy-flow-toggle event.
+  toggle(part) {
+    const entity = this.config[`${part}Entity`], on = !this.switchedOn(part);
+    if (entity && this._hass && !this.previewState) {
+      const cover = entity.startsWith("cover.");
+      this._hass.callService(cover ? "cover" : "homeassistant", "toggle", { entity_id: entity });
+      return;
+    }
+    this.local[part] = on;
+    this.render();
+    this.dispatchEvent(new CustomEvent("energy-flow-toggle", { detail: { part, on }, bubbles: true, composed: true }));
+  }
+
+  // In the festive season a tap on the window steps through three: all on, the decorations off with the room still lit,
+  // everything off. The decorations show only with the lights on, and then light up after sunset by themselves.
+  tapWindow() {
+    const time = this.previewState?.time ?? Date.now();
+    if (!this.config.festive || !christmasSeason(time)) { this.toggle("lights"); return; }
+    const lights = this.switchedOn("lights"), decorations = this.local.decorations ?? true;
+    const next = lights && decorations ? [true, false] : lights ? [false, false] : [true, true];
+    this.local.decorations = next[1];
+    if (next[0] !== lights) this.toggle("lights");
+    else this.render();
   }
 
   // The lab's way in: readings, weather and sky set by hand instead of read from Home Assistant.
@@ -178,6 +235,7 @@ export class EnergyFlowCard extends HTMLElement {
         power: this.signed(e, "entity"), entity: e.entity })),
       grid: this.signed(cfg.grid, "entity", "import", "export"),
       ev: this.signed(cfg.ev, "entity"),
+      evSoc: this.number(cfg.ev.soc),
       battery1: { power: this.signed(cfg.battery1, "power", "discharge", "charge"), soc: this.number(cfg.battery1.soc) },
       battery2: { power: this.signed(cfg.battery2, "power", "discharge", "charge"), soc: this.number(cfg.battery2.soc) },
       weather: HA_WEATHER[weatherState] || (cfg.weather ? "cloudy" : "clear"),
@@ -204,8 +262,10 @@ export class EnergyFlowCard extends HTMLElement {
   }
 
   render() {
+    if (this.view.suspended) return;  // off the page: drawn again when it is back (connectedCallback)
     const state = this.previewState || (this._hass ? this.readHass() : null);
-    if (state) this.view.update(state);
+    if (state) this.view.update({ ...state, garage: this.switchedOn("garage"), lights: this.switchedOn("lights"),
+      decorations: this.switchedOn("lights") && (this.local.decorations ?? true) });
   }
 
   getCardSize() { return 7; }
@@ -221,9 +281,10 @@ export class EnergyFlowCard extends HTMLElement {
         { name: "title", selector: text },
         { name: "weather", selector: { entity: { domain: "weather" } } },
         { name: "temperature", selector: { entity: { domain: "sensor", device_class: "temperature" } } },
-        { name: "christmas", selector: { boolean: {} } },
-        { name: "garage", selector: { select: { mode: "dropdown", options: [
-          { value: "closed", label: "Closed" }, { value: "open", label: "Open: the car plugged into a wall charger" }] } } },
+        { name: "garage", selector: { select: { mode: "dropdown", custom_value: true, options: [
+          { value: "closed", label: "Off: shutter down" }, { value: "open", label: "On: the car and its wall charger" }] } } },
+        { name: "lights", default: "on", selector: { select: { mode: "dropdown", custom_value: true, options: [
+          { value: "on", label: "On" }, { value: "off", label: "Off" }] } } },
         { name: "effects", selector: { select: { mode: "dropdown", options: [
           { value: "auto", label: "Auto: asks on devices that struggle" }, { value: "high", label: "High" },
           { value: "medium", label: "Medium" }, { value: "low", label: "Low" }] } } },
@@ -238,10 +299,11 @@ export class EnergyFlowCard extends HTMLElement {
           { name: "extras", selector: { object: { multiple: true, label_field: "name", description_field: "entity", fields: {
             name: { label: "Name", selector: text }, entity: { label: "Power sensor", required: true, selector: power },
             invert: { label: "Flip the sign", selector: { boolean: {} } } } } } }] },
-        { type: "expandable", name: "ev", title: "EV charger (shown with the garage open)", schema: [
-          { name: "entity", selector: power }, { name: "name", selector: text }] },
+        { type: "expandable", name: "ev", title: "EV (the car behind the garage door)", schema: [
+          { name: "entity", selector: power }, { name: "soc", selector: power }, { name: "invert", selector: { boolean: {} } },
+          { name: "name", selector: text }, color("color")] },
         ...[1, 2].map((n) => ({ type: "expandable", name: `battery${n}`, title: `Battery ${n}`, schema: [
-          ...(n === 2 ? [{ name: "show", selector: { boolean: {} } }] : []), { name: "power", selector: power }, { name: "soc", selector: power },
+          { name: "show", selector: { boolean: {} } }, { name: "power", selector: power }, { name: "soc", selector: power },
           { name: "discharge", selector: power }, { name: "charge", selector: power },
           { name: "invert", selector: { boolean: {} } }, { name: "name", selector: text },
           color("color"), color("face")] })),
@@ -260,10 +322,9 @@ export class EnergyFlowCard extends HTMLElement {
     const socs = Object.keys(hass?.states || {}).filter((id) => id.startsWith("sensor.")
       && hass.states[id].attributes?.device_class === "battery");
     const weather = Object.keys(hass?.states || {}).find((id) => id.startsWith("weather.")) || "";
-    // Only what was found goes in, so a new card's YAML has no empty entries. christmas stays: the editor shows a
-    // missing switch as off.
-    // Battery 2 is on by default; written out so the editor's switch shows it.
-    const config = { christmas: true, battery2: { show: true } };
+    // Only what was found goes in, so a new card's YAML has no empty entries. The batteries and the lights are on by
+    // default; written out so the editor shows it.
+    const config = { lights: "on", battery1: { show: true }, battery2: { show: true } };
     if (weather) config.weather = weather;
     for (const [part, key, id] of [["solar", "entity", find("solar", "pv")], ["grid", "entity", find("grid")],
       ["home", "entity", find("home", "house", "load", "consumption")], ["battery1", "power", find("battery")],
@@ -275,7 +336,7 @@ export class EnergyFlowCard extends HTMLElement {
 }
 
 const LABELS = {
-  title: "Title", weather: "Weather entity", temperature: "Outdoor temperature sensor (optional)", christmas: "Christmas decorations (6 December to 6 January)", garage: "Garage door", effects: "Detail", entity: "Power sensor", import: "Import sensor (instead of one signed sensor)",
+  title: "Title", weather: "Weather entity", temperature: "Outdoor temperature sensor (optional)", garage: "Garage (or a cover, switch or light entity; tap the shutter to toggle)", lights: "House lights (or a light or switch entity; tap the window to toggle)", effects: "Detail", entity: "Power sensor", import: "Import sensor (instead of one signed sensor)",
   export: "Export sensor", invert: "Flip the sign", name: "Name", color: "Flow colour (#rrggbb)", show: "Show in picture",
   power: "Power sensor", soc: "Charge (%) sensor", discharge: "Discharge sensor (instead of one signed sensor)",
   charge: "Charge sensor", face: "Glass cover colour (#rrggbb, any colour)", glass: "Solar glass", roof: "Roof", wall: "Wall",
@@ -285,7 +346,7 @@ const HELPERS = {
   temperature: "Above 30 °C the air shimmers; below 3 °C frost grows, fully at -10 °C. Without a sensor the weather entity's temperature is used.",
   effects: "Auto asks on a device where the animation is choppy, and keeps the answer there.",
   extras: "Pool, A/C, dishwasher... each with its own power sensor. Shown above the home reading; more than three scroll.",
-  invert: "Grid: + is import. Batteries: + is discharging. Turn on if your sensor uses the other sign.",
+  invert: "Grid: + is import. Batteries: + is discharging. EV: + is charging the car. Turn on if your sensor uses the other sign.",
 };
 
 if (!customElements.get("energy-flow-card")) {

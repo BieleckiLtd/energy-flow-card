@@ -6,6 +6,6 @@
   "license": "MIT",
   "scripts": {
     "build": "node build.mjs",
-    "test": "node build.mjs && node --test test/"
+    "test": "node build.mjs && node --test"
   }
 }

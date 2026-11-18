@@ -42,9 +42,10 @@
 .ef-grid-pipe .ef-pipe-shade{transform:translate(-4px,2.2px)}
 /* At night the cells lose the sky's blue. */
 .ef-night-glass{fill:#07080c;opacity:calc(.6 * var(--ef-darkness,0));transition:opacity .65s ease-out}
-/* The grid pipe has one lane, but up to three sources can send power out along it: each gets every n-th pulse,
+/* The grid pipe has one lane, but up to four sources can send power out along it: each gets every n-th pulse,
    so their colours take turns. A flow's pulses repeat every n cycles (--ef-turns), shifted by its turn. */
-.ef-grid-pipe .ef-flow{animation-name:ef-grid-beat;animation-duration:calc(var(--ef-cycle-period,4.8s) * var(--ef-turns,1))}
+/* (and any flow taking turns: the car charging from several sources, the batteries sharing a house line) */
+:is(.ef-grid-pipe .ef-flow,.ef-flow[style*="--ef-turns"]){animation-name:ef-grid-beat;animation-duration:calc(var(--ef-cycle-period,4.8s) * var(--ef-turns,1))}
 /* Wall bars run along the front wall: same material as the solar drop, and their visible top face recedes along the house's depth axis. */
 .ef-reflection{opacity:.2}
 .ef[data-weather=drizzle] .ef-reflection,.ef[data-weather=rain] .ef-reflection,.ef[data-weather=heavy] .ef-reflection,.ef[data-weather=storm] .ef-reflection{opacity:.38}
@@ -60,11 +61,13 @@
 .ef-top{stroke-width:2.2;stroke:color-mix(in srgb,var(--ef-flow-color,var(--ef-source-color)) 80%,#fff)}
 .ef-line{transition:transform .55s cubic-bezier(.3,.7,.2,1),opacity .4s ease,visibility 0s}
 .ef-line.ef-gone{opacity:0;visibility:hidden;transition:transform .55s cubic-bezier(.3,.7,.2,1),opacity .4s ease,visibility 0s .55s}
-.ef-still .ef-line{transition:none!important}
+.ef-still .ef-line,.ef-swap .ef-line{transition:none!important}
+/* battery 2's house line sharing battery 1's: its pulses only, on battery 1's rail */
+.ef-shared :is(.ef-lane,.ef-pipe-shade){visibility:hidden}
 @property --ef-beat{syntax:"<number>";inherits:true;initial-value:0}
 .ef{--ef-cycle-distance:480}
 /* The beat runs on each wire, not on the whole picture: an animated inherited property restyles everything under it every frame.
-   energy.js keeps the wires in step. */
+   view.js keeps the wires in step. */
 .ef-flow{animation:ef-flow-beat var(--ef-cycle-period,4.8s) linear infinite;fill:none;stroke:var(--ef-flow-color,var(--ef-source-color));stroke-width:13;stroke-linecap:butt;
   --ef-direction:-1;--ef-leading-edge:1}
 .ef-flow[data-flow=in]{--ef-direction:1;--ef-leading-edge:0}
@@ -172,28 +175,58 @@
 .ef-restart .ef-flow{animation-name:none}
 /* The lights switch on after sunset: off, then on bulb by bulb along each string within a second or so. */
 .ef-xmas-glow circle,.ef-xmas-bulbs circle,.ef-xmas-bokeh{fill-opacity:0;transition:fill-opacity .12s}
-.ef-xmas-lit .ef-xmas-glow circle,.ef-xmas-lit .ef-xmas-bulbs circle,.ef-xmas-lit .ef-xmas-bokeh{fill-opacity:1;transition-delay:calc(var(--i,0) * 24ms)}
+.ef-xmas-lit:not(.ef-xmas-off) :is(.ef-xmas-glow circle,.ef-xmas-bulbs circle,.ef-xmas-bokeh){fill-opacity:1;transition-delay:calc(var(--i,0) * 24ms)}
+/* Switched off by a tap (or with the lights): the bulbs go out one by one along each string, then the tree and the
+   strings fade away; switched on, the tree and strings fade in, then the bulbs light up as they do at dusk. */
+.ef-xmas-off :is(.ef-xmas-glow circle,.ef-xmas-bulbs circle,.ef-xmas-bokeh){transition-delay:calc(var(--i,0) * 16ms)}
+:is(#ef-xmas-tree,.ef-xmas-wire){transition:opacity .6s ease}
+.ef-xmas-off :is(#ef-xmas-tree,.ef-xmas-wire){opacity:0;transition-delay:.9s}
+.ef-still :is(#ef-xmas-tree,.ef-xmas-wire,.ef-xmas-glow circle,.ef-xmas-bulbs circle,.ef-xmas-bokeh,.ef-xmas-wash){transition:none!important}
 @media (prefers-reduced-motion:reduce){.ef,.ef *{animation-play-state:paused!important}#ef-labels text,#ef-labels tspan{transition:none}}
 /* Parts the owner does not have are left out of the picture. */
 .ef-no-solar :is(#ef-solar-drop,#ef-solar-label,#ef-solar-lead),
+/* Room on the left: with no EV label, solar's label slides left; with no battery 1 (so no battery at all), the grid's
+   does, its leader growing up to its pipe (drawn bottom up, 12 of its 60 units shown otherwise) */
+:is(#ef-solar-label,#ef-solar-lead,#ef-grid-label,#ef-grid-lead){transition:transform .7s cubic-bezier(.3,.7,.2,1),stroke-dashoffset .7s cubic-bezier(.3,.7,.2,1)}
+#ef-grid-lead{stroke-dasharray:60 60;stroke-dashoffset:48}
+.ef:not(.ef-ev-on) :is(#ef-solar-label,#ef-solar-lead){transform:translateX(-99px)}
+.ef-no-b1 :is(#ef-grid-label,#ef-grid-lead){transform:translateX(-135px)}
+.ef-no-b1 #ef-grid-lead{stroke-dashoffset:0}
+.ef-still :is(#ef-solar-label,#ef-solar-lead,#ef-grid-label,#ef-grid-lead){transition:none}
+.ef-no-b1 :is(#ef-b1-battery,#ef-b1-reflection,#ef-l-b1,#ef-b1-label,#ef-b1-lead){display:none}
 .ef-no-b2 :is(#ef-b2-battery,#ef-b2-reflection,#ef-l-b2,#ef-b2-label,#ef-b2-lead){display:none}
 /* The garage door is shut unless the owner opens it (and, with an EV sensor, the car is charging): then the shutter
    rolls up and the charger shows. A copy of the door, over the garage inside, slides up out of the doorway, and back
    down to close it once the label has gone. Moved, not clipped: browsers do not repaint an svg clip-path as it animates. */
 #ef-shutter-slide{transition:transform 1.4s cubic-bezier(.45,0,.25,1) .2s}
-.ef-garage-open #ef-shutter-slide{transform:translateY(-250px);transition-delay:0s}
+.ef-garage-open #ef-shutter-slide{transform:translateY(-238px);transition-delay:0s}
 /* In the heat the still parts are a snapshot on the shimmer canvas, which jumps straight to the new state: while the
    shutter moves, the garage and shutter are drawn live over it. */
 .ef-baked.ef-garage-moving :is(#ef-garage,#ef-shutter){visibility:visible}
+/* the cable's pulses wait for the shutter to be all the way up */
+.ef-garage-moving #ef-ev-drop .ef-flow{display:none}
 /* The car's charging power, on a leader up from the wall box: the leader grows once the shutter is up, then the label
    grows out of its top. Going, both shrink away quickly before the shutter comes down. */
-#ef-ev-lead{transform-origin:56px 786px;transform:scaleY(0);visibility:hidden;
+#ef-ev-lead{transform-origin:102px 796px;transform:scaleY(0);visibility:hidden;
   transition:transform .18s ease-in .05s,visibility 0s .23s}
-#ef-ev-label{transform-origin:56px 330px;transform:scale(.3);opacity:0;visibility:hidden;
+#ef-ev-label{transform-origin:102px 330px;transform:scale(.3);opacity:0;visibility:hidden;
   transition:transform .18s ease-in,opacity .15s ease-in,visibility 0s .18s}
 .ef-ev-on #ef-ev-lead{transform:none;visibility:visible;transition:transform .32s cubic-bezier(.3,.7,.2,1) 1.15s,visibility 0s 1.15s}
 .ef-ev-on #ef-ev-label{transform:none;opacity:1;visibility:visible;
   transition:transform .45s cubic-bezier(.3,1.45,.5,1) 1.37s,opacity .2s ease 1.37s,visibility 0s 1.37s}
+/* The house lights: off, the room behind the window goes dark and its reflection fades */
+#ef-room-dark{opacity:0;transition:opacity .4s ease}
+.ef-lights-off #ef-room-dark{opacity:.94}
+#ef-window-reflection{transition:opacity .4s ease}
+.ef-lights-off #ef-window-reflection{opacity:.03}
+.ef-still :is(#ef-room-dark,#ef-window-reflection){transition:none}
+.ef-tap{fill:transparent;pointer-events:all;cursor:default;-webkit-tap-highlight-color:transparent}
+/* The bottom row moving between two batteries and one: each text slides to its new place */
+.ef-relabel :is(#ef-b1-label text,#ef-b2-label text,#ef-grid-name,#ef-grid){
+  transition:transform .55s cubic-bezier(.3,.7,.2,1),fill .42s ease-in-out,filter .42s ease-in-out}
+/* with the garage shut there is no shutter to wait for */
+.ef-ev-on:not(.ef-garage-open) #ef-ev-lead{transition-delay:0s,0s}
+.ef-ev-on:not(.ef-garage-open) #ef-ev-label{transition-delay:.22s,.22s,.22s}
 .ef-still :is(#ef-shutter-slide,#ef-ev-lead,#ef-ev-label){transition:none!important}
 @media (prefers-reduced-motion:reduce){:is(#ef-shutter-slide,#ef-ev-lead,#ef-ev-label){transition:none!important}}
 .ef-garage-lamp{opacity:calc(.5 + .5 * var(--ef-darkness,0));transition:opacity .65s ease-out}
@@ -208,7 +241,7 @@
 .ef-xmas-glow{fill:url(#ef-xmas-warm)}
 .ef-xmas-bulbs circle{fill:#fff4d6}
 .ef-xmas-wash{opacity:0;transition:opacity .4s}
-.ef-xmas-lit .ef-xmas-wash{opacity:.6;transition-delay:.6s}
+.ef-xmas-lit:not(.ef-xmas-off) .ef-xmas-wash{opacity:.6;transition-delay:.6s}
 .ef-xmas-room{opacity:calc(.55 + .45 * var(--ef-darkness,0))}
 .ef-twinkle{animation:ef-twinkle 2.4s ease-in-out infinite}
 .ef-xmas-bokeh{animation-name:ef-glimmer}
@@ -459,7 +492,11 @@
 <radialGradient id="ef-frost-dot"><stop offset="0" stop-color="#fff"/><stop offset=".45" stop-color="#fff" stop-opacity=".75"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
 <radialGradient id="ef-frost-sheet" cx=".5" cy=".42" r=".62"><stop offset="0" stop-color="#fff" stop-opacity=".2"/><stop offset=".72" stop-color="#fff" stop-opacity=".28"/><stop offset="1" stop-color="#fff" stop-opacity=".66"/></radialGradient>
 <!-- the open garage: its doorway, walls, lamp light, shutter and charger -->
-<clipPath id="ef-garage-opening"><polygon points="0,714 235,797.5 235,1047.5 0,964"/></clipPath>
+<clipPath id="ef-garage-opening"><path d="M0 714 235 797.5 235 1047.5 0 964Z"/></clipPath>
+<!-- the car's route: up its charging cable from behind the car, through the wall box, up the pipe to the ceiling -->
+<path id="ef-route-ev" d="M89 905.45C79 906.77 72.5 904.77 68 898.32C62.5 889.59 60.7 872.01 60.7 845.01L60.7 834.01L60 815V740"/>
+<path id="ef-route-ev-cable" d="M89 905.45C79 906.77 72.5 904.77 68 898.32C62.5 889.59 60.7 872.01 60.7 845.01L60.7 834.01"/>
+<path id="ef-route-ev-pipe" d="M60 815V740"/>
 <linearGradient id="ef-garage-side" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="240" y2="0"><stop offset="0" stop-color="#202124"/><stop offset="1" stop-color="#141517"/></linearGradient>
 <linearGradient id="ef-garage-floor" gradientUnits="userSpaceOnUse" x1="150" y1="925" x2="175" y2="1015"><stop offset="0" stop-color="#17181a"/><stop offset="1" stop-color="#2b2c30"/></linearGradient>
 <linearGradient id="ef-garage-lintel-shade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-opacity=".7"/><stop offset="1" stop-opacity="0"/></linearGradient>
@@ -554,6 +591,13 @@
 <g id="ef-garage-door">
 <polygon points="0,714 235,797.5 235,1047.5 0,964" fill="#2b2b2b"/>
 <path d="M0 725.9L235 809.4M0 737.8L235 821.3M0 749.7L235 833.2M0 761.6L235 845.1M0 773.5L235 857M0 785.4L235 868.9M0 797.3L235 880.8M0 809.2L235 892.7M0 821.1L235 904.6M0 833L235 916.5M0 844.9L235 928.4M0 856.8L235 940.3M0 868.7L235 952.2M0 880.6L235 964.1M0 892.5L235 976M0 904.4L235 987.9M0 916.3L235 999.8M0 928.2L235 1011.7M0 940.1L235 1023.6M0 952L235 1035.5" stroke="#1e1e1e" stroke-width="1.3" fill="none"/>
+<!-- its bottom bar: the one part that still shows under the lintel when the shutter is up -->
+<g transform="matrix(1 .35532 0 1 0 714)">
+  <rect x="0" y="238" width="235" height="6" fill="url(#ef-garage-slat)"/>
+  <rect x="0" y="244" width="235" height="4.5" fill="#595c61"/>
+  <path d="M0 244.4H235" stroke="#9a9da2" stroke-opacity=".7" stroke-width=".9"/>
+  <rect x="0" y="248.5" width="235" height="1.6" fill="#0d0d0e"/>
+</g>
 </g>
 <!-- The garage open (garage: open): the shutter rolled up under the lintel, and through the opening the garage's far
      side wall running back into the house from the left jamb, with a wall-box charger on it, and the floor. The garage
@@ -572,11 +616,461 @@
        garage, just above the car's left rear corner; its cable hangs from a gland under the front and drops behind the car. Drawn in the side wall's frame (x along the wall, y down), its 0.12 m
        depth coming out towards the viewer as (8.7, 5.1): its body is the rounded outline swept from the wall out to the
        front face, one shape, with the front face on top. -->
-  <g id="ef-ev-charger" transform="matrix(1 -.2317 0 1 37 795.5)">
+  <!-- The charger's supply: a pipe like the solar drop, up the side wall from the top of the box into the ceiling
+       behind the shutter box. Its route runs from the car (the source, like a battery) to the junction overhead: up the
+       charging cable (thin pulses), through the box, then up the pipe, whose foot is hidden behind the box. -->
+  <g id="ef-ev-drop" fill="none" stroke-width="13">
+    <path d="M60 815V740" stroke="#4c4c4c"/>
+    <!-- the charging cable, in the wall box's frame: drawn under the pulses so they run along it -->
+    <g transform="matrix(1 -.2317 0 1 37 795.5)">
+      <path d="M23.7 44V55C23.7 82 25.5 100 31 110C35.5 117.5 42 121 52 122" stroke="#0e0f11" stroke-width="3.4" stroke-linecap="round"/>
+      <path d="M23 50V56C23 82 24.8 99 30 108.5C33.5 114.5 38 118 44 120" stroke="#4a4d53" stroke-opacity=".7" stroke-width=".9"/>
+    </g>
+    <g id="ef-f-ev" class="ef-flow" data-route="ef-route-ev" data-junction-end="" data-flow="off" style="--ef-source-color:var(--ef-ev-color,#9b7bea)">
+     <!-- The run through the wall box is skipped: shifted by the hidden length (cable's last 7 units below the box, the
+          19 through it, the pipe's 24.8 behind it), a pulse leaving the pipe comes out on the cable at that moment. -->
+     <g stroke-width="3.6" data-junction-shift="-50.8">
+      <use class="ef-pulse ef-p1" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p2" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p3" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p4" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p5" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p6" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p7" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p8" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p9" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p10" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p11" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p12" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p13" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p14" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p15" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p16" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p17" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p18" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p19" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p20" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p21" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p22" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p23" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p24" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p25" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p26" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p27" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p28" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p29" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p30" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p31" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p32" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p33" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p34" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p35" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p36" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p37" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p38" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p39" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p40" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p41" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p42" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p43" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p44" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p45" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p46" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p47" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p48" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p49" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p50" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p51" href="#ef-route-ev-cable"/>
+     </g>
+     <g data-junction-shift="-109.75">
+      <use class="ef-pulse ef-p1" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p2" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p3" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p4" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p5" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p6" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p7" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p8" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p9" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p10" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p11" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p12" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p13" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p14" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p15" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p16" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p17" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p18" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p19" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p20" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p21" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p22" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p23" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p24" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p25" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p26" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p27" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p28" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p29" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p30" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p31" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p32" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p33" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p34" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p35" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p36" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p37" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p38" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p39" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p40" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p41" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p42" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p43" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p44" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p45" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p46" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p47" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p48" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p49" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p50" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p51" href="#ef-route-ev-pipe"/>
+     </g>
+    </g>
+    <g id="ef-f-ev2" class="ef-flow" data-route="ef-route-ev" data-junction-end="" data-flow="off" style="--ef-source-color:var(--ef-ev-color,#9b7bea)">
+     <!-- The run through the wall box is skipped: shifted by the hidden length (cable's last 7 units below the box, the
+          19 through it, the pipe's 24.8 behind it), a pulse leaving the pipe comes out on the cable at that moment. -->
+     <g stroke-width="3.6" data-junction-shift="-50.8">
+      <use class="ef-pulse ef-p1" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p2" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p3" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p4" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p5" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p6" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p7" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p8" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p9" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p10" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p11" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p12" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p13" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p14" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p15" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p16" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p17" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p18" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p19" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p20" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p21" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p22" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p23" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p24" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p25" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p26" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p27" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p28" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p29" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p30" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p31" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p32" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p33" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p34" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p35" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p36" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p37" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p38" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p39" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p40" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p41" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p42" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p43" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p44" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p45" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p46" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p47" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p48" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p49" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p50" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p51" href="#ef-route-ev-cable"/>
+     </g>
+     <g data-junction-shift="-109.75">
+      <use class="ef-pulse ef-p1" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p2" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p3" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p4" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p5" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p6" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p7" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p8" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p9" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p10" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p11" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p12" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p13" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p14" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p15" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p16" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p17" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p18" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p19" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p20" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p21" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p22" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p23" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p24" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p25" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p26" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p27" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p28" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p29" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p30" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p31" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p32" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p33" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p34" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p35" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p36" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p37" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p38" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p39" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p40" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p41" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p42" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p43" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p44" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p45" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p46" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p47" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p48" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p49" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p50" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p51" href="#ef-route-ev-pipe"/>
+     </g>
+    </g>
+    <g id="ef-f-ev3" class="ef-flow" data-route="ef-route-ev" data-junction-end="" data-flow="off" style="--ef-source-color:var(--ef-ev-color,#9b7bea)">
+     <!-- The run through the wall box is skipped: shifted by the hidden length (cable's last 7 units below the box, the
+          19 through it, the pipe's 24.8 behind it), a pulse leaving the pipe comes out on the cable at that moment. -->
+     <g stroke-width="3.6" data-junction-shift="-50.8">
+      <use class="ef-pulse ef-p1" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p2" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p3" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p4" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p5" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p6" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p7" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p8" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p9" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p10" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p11" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p12" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p13" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p14" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p15" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p16" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p17" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p18" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p19" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p20" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p21" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p22" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p23" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p24" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p25" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p26" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p27" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p28" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p29" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p30" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p31" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p32" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p33" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p34" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p35" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p36" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p37" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p38" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p39" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p40" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p41" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p42" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p43" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p44" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p45" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p46" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p47" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p48" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p49" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p50" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p51" href="#ef-route-ev-cable"/>
+     </g>
+     <g data-junction-shift="-109.75">
+      <use class="ef-pulse ef-p1" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p2" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p3" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p4" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p5" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p6" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p7" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p8" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p9" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p10" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p11" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p12" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p13" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p14" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p15" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p16" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p17" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p18" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p19" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p20" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p21" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p22" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p23" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p24" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p25" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p26" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p27" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p28" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p29" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p30" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p31" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p32" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p33" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p34" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p35" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p36" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p37" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p38" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p39" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p40" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p41" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p42" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p43" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p44" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p45" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p46" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p47" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p48" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p49" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p50" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p51" href="#ef-route-ev-pipe"/>
+     </g>
+    </g>
+    <g id="ef-f-ev4" class="ef-flow" data-route="ef-route-ev" data-junction-end="" data-flow="off" style="--ef-source-color:var(--ef-ev-color,#9b7bea)">
+     <!-- The run through the wall box is skipped: shifted by the hidden length (cable's last 7 units below the box, the
+          19 through it, the pipe's 24.8 behind it), a pulse leaving the pipe comes out on the cable at that moment. -->
+     <g stroke-width="3.6" data-junction-shift="-50.8">
+      <use class="ef-pulse ef-p1" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p2" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p3" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p4" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p5" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p6" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p7" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p8" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p9" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p10" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p11" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p12" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p13" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p14" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p15" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p16" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p17" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p18" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p19" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p20" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p21" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p22" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p23" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p24" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p25" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p26" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p27" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p28" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p29" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p30" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p31" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p32" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p33" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p34" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p35" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p36" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p37" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p38" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p39" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p40" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p41" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p42" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p43" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p44" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p45" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p46" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p47" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p48" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p49" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p50" href="#ef-route-ev-cable"/>
+      <use class="ef-pulse ef-p51" href="#ef-route-ev-cable"/>
+     </g>
+     <g data-junction-shift="-109.75">
+      <use class="ef-pulse ef-p1" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p2" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p3" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p4" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p5" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p6" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p7" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p8" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p9" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p10" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p11" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p12" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p13" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p14" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p15" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p16" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p17" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p18" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p19" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p20" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p21" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p22" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p23" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p24" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p25" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p26" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p27" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p28" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p29" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p30" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p31" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p32" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p33" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p34" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p35" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p36" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p37" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p38" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p39" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p40" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p41" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p42" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p43" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p44" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p45" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p46" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p47" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p48" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p49" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p50" href="#ef-route-ev-pipe"/>
+      <use class="ef-pulse ef-p51" href="#ef-route-ev-pipe"/>
+     </g>
+    </g>
+    <path d="M60 815V740" transform="translate(-4.4 .9)" stroke="#000" stroke-opacity=".3" stroke-width="4.2"/>
+  </g>
+  <g id="ef-ev-charger" transform="matrix(1 -.2317 0 1 45 793.64)">
     <rect x="1" y="4" width="35" height="51" rx="11" fill="#000" opacity=".14"/>
     <rect x="2.5" y="5.5" width="31" height="47" rx="9" fill="#000" opacity=".22"/>
-    <path d="M23.7 44V55C23.7 82 25.5 100 31 110C35.5 117.5 42 121 52 122" fill="none" stroke="#0e0f11" stroke-width="3.4" stroke-linecap="round"/>
-    <path d="M23 50V56C23 82 24.8 99 30 108.5C33.5 114.5 38 118 44 120" fill="none" stroke="#4a4d53" stroke-opacity=".7" stroke-width=".9"/>
     <path d="M26.05 1.1 34.75 6.2A8 8 0 0 1 38.7 13.1V43.1A8 8 0 0 1 30.7 51.1H16.7A8 8 0 0 1 12.65 50L3.95 44.9A8 8 0 0 1 0 38V8A8 8 0 0 1 8 0H22A8 8 0 0 1 26.05 1.1Z" fill="url(#ef-ev-body)"/>
     <rect x="8.7" y="5.1" width="30" height="46" rx="8" fill="url(#ef-ev-face)"/>
     <path d="M9.4 45V13.1Q9.4 5.8 16.7 5.8H31" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width=".8"/>
@@ -635,10 +1129,6 @@
     <rect x="227" y="0" width="8" height="250" fill="#232528"/>
     <path d="M228.4 0V250M5.6 0V250" stroke="#fff" stroke-opacity=".08" stroke-width="1"/>
     <rect x="0" y="0" width="235" height="70" fill="url(#ef-garage-lintel-shade)"/>
-    <rect x="0" y="0" width="235" height="6" fill="url(#ef-garage-slat)"/>
-    <rect x="0" y="6" width="235" height="4.5" fill="#595c61"/>
-    <path d="M0 6.4H235" stroke="#9a9da2" stroke-opacity=".7" stroke-width=".9"/>
-    <rect x="0" y="10.5" width="235" height="1.6" fill="#0d0d0e"/>
   </g>
 </g>
 <!-- the shutter as it rolls up or down: the door again, over the open garage, sliding within the doorway -->
@@ -657,6 +1147,330 @@
   <g id="ef-l-b2" class="ef-line">
     <use href="#ef-rail-b2" class="ef-lane"/>
     <g id="ef-f-b2" transform="matrix(1 -0.2147 0 1 0 0)" class="ef-flow" data-route="ef-route-b2" data-junction-end="" data-flow="out" style="--ef-source-color:var(--ef-b2-color,#4aa5f2)">
+      <g class="ef-front" transform="translate(0 1.1)">
+        <use class="ef-pulse ef-p1" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p2" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p3" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p4" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p5" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p6" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p7" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p8" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p9" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p10" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p11" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p12" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p13" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p14" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p15" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p16" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p17" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p18" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p19" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p20" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p21" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p22" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p23" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p24" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p25" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p26" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p27" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p28" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p29" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p30" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p31" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p32" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p33" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p34" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p35" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p36" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p37" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p38" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p39" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p40" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p41" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p42" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p43" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p44" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p45" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p46" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p47" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p48" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p49" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p50" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p51" href="#ef-route-b2"/>
+      </g>
+      <g class="ef-top" transform="translate(0 995.05) matrix(1 0 1.76 1 0 0) translate(0 -1000.45)">
+        <use class="ef-pulse ef-p1" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p2" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p3" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p4" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p5" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p6" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p7" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p8" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p9" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p10" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p11" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p12" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p13" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p14" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p15" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p16" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p17" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p18" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p19" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p20" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p21" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p22" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p23" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p24" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p25" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p26" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p27" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p28" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p29" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p30" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p31" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p32" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p33" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p34" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p35" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p36" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p37" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p38" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p39" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p40" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p41" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p42" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p43" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p44" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p45" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p46" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p47" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p48" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p49" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p50" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p51" href="#ef-route-b2"/>
+      </g>
+    </g>
+    <g id="ef-f-b2-2" transform="matrix(1 -0.2147 0 1 0 0)" class="ef-flow" data-route="ef-route-b2" data-junction-end="" data-flow="out" style="--ef-source-color:var(--ef-b2-color,#4aa5f2)">
+      <g class="ef-front" transform="translate(0 1.1)">
+        <use class="ef-pulse ef-p1" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p2" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p3" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p4" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p5" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p6" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p7" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p8" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p9" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p10" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p11" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p12" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p13" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p14" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p15" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p16" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p17" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p18" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p19" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p20" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p21" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p22" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p23" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p24" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p25" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p26" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p27" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p28" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p29" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p30" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p31" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p32" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p33" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p34" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p35" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p36" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p37" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p38" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p39" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p40" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p41" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p42" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p43" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p44" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p45" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p46" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p47" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p48" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p49" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p50" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p51" href="#ef-route-b2"/>
+      </g>
+      <g class="ef-top" transform="translate(0 995.05) matrix(1 0 1.76 1 0 0) translate(0 -1000.45)">
+        <use class="ef-pulse ef-p1" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p2" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p3" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p4" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p5" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p6" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p7" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p8" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p9" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p10" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p11" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p12" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p13" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p14" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p15" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p16" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p17" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p18" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p19" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p20" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p21" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p22" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p23" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p24" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p25" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p26" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p27" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p28" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p29" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p30" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p31" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p32" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p33" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p34" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p35" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p36" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p37" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p38" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p39" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p40" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p41" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p42" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p43" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p44" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p45" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p46" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p47" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p48" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p49" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p50" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p51" href="#ef-route-b2"/>
+      </g>
+    </g>
+    <g id="ef-f-b2-3" transform="matrix(1 -0.2147 0 1 0 0)" class="ef-flow" data-route="ef-route-b2" data-junction-end="" data-flow="out" style="--ef-source-color:var(--ef-b2-color,#4aa5f2)">
+      <g class="ef-front" transform="translate(0 1.1)">
+        <use class="ef-pulse ef-p1" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p2" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p3" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p4" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p5" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p6" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p7" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p8" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p9" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p10" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p11" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p12" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p13" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p14" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p15" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p16" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p17" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p18" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p19" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p20" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p21" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p22" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p23" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p24" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p25" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p26" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p27" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p28" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p29" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p30" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p31" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p32" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p33" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p34" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p35" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p36" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p37" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p38" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p39" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p40" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p41" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p42" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p43" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p44" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p45" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p46" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p47" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p48" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p49" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p50" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p51" href="#ef-route-b2"/>
+      </g>
+      <g class="ef-top" transform="translate(0 995.05) matrix(1 0 1.76 1 0 0) translate(0 -1000.45)">
+        <use class="ef-pulse ef-p1" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p2" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p3" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p4" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p5" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p6" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p7" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p8" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p9" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p10" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p11" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p12" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p13" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p14" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p15" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p16" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p17" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p18" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p19" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p20" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p21" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p22" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p23" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p24" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p25" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p26" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p27" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p28" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p29" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p30" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p31" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p32" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p33" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p34" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p35" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p36" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p37" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p38" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p39" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p40" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p41" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p42" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p43" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p44" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p45" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p46" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p47" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p48" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p49" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p50" href="#ef-route-b2"/>
+        <use class="ef-pulse ef-p51" href="#ef-route-b2"/>
+      </g>
+    </g>
+    <g id="ef-f-b2-4" transform="matrix(1 -0.2147 0 1 0 0)" class="ef-flow" data-route="ef-route-b2" data-junction-end="" data-flow="out" style="--ef-source-color:var(--ef-b2-color,#4aa5f2)">
       <g class="ef-front" transform="translate(0 1.1)">
         <use class="ef-pulse ef-p1" href="#ef-route-b2"/>
         <use class="ef-pulse ef-p2" href="#ef-route-b2"/>
@@ -784,6 +1598,12 @@
   <g id="ef-l-h4" class="ef-line ef-gone" style="transform:translateY(28.5px)">
     <use href="#ef-rail-house" class="ef-lane"/>
     <use id="ef-f-h4" class="ef-flow" data-route="ef-route-house" data-flow="out" href="#ef-house-pulse" style="--ef-source-color:var(--ef-grid-color,#cfd3d6)"/>
+    <use href="#ef-rail-house" class="ef-pipe-shade"/>
+  </g>
+  <!-- the car, giving power to the house -->
+  <g id="ef-l-h5" class="ef-line ef-gone" style="transform:translateY(47.5px)">
+    <use href="#ef-rail-house" class="ef-lane"/>
+    <use id="ef-f-h5" class="ef-flow" data-route="ef-route-house" data-flow="out" href="#ef-house-pulse" style="--ef-source-color:var(--ef-ev-color,#9b7bea)"/>
     <use href="#ef-rail-house" class="ef-pipe-shade"/>
   </g>
 </g>
@@ -1278,6 +2098,169 @@
       </g>
     </g>
   </g>
+  <g id="ef-f-grid4" class="ef-flow" data-route="ef-route-grid" data-flow="off" style="--ef-source-color:var(--ef-grid-color,#cfd3d6)">
+    <g data-head-skew="-6.5:14.34 2.5:0 6.5:1.46" data-head-ramp="26">
+      <use class="ef-pulse ef-p1" href="#ef-route-grid-riser"/>
+      <use class="ef-pulse ef-p2" href="#ef-route-grid-riser"/>
+      <use class="ef-pulse ef-p3" href="#ef-route-grid-riser"/>
+      <use class="ef-pulse ef-p4" href="#ef-route-grid-riser"/>
+      <use class="ef-pulse ef-p5" href="#ef-route-grid-riser"/>
+      <use class="ef-pulse ef-p6" href="#ef-route-grid-riser"/>
+      <use class="ef-pulse ef-p7" href="#ef-route-grid-riser"/>
+      <use class="ef-pulse ef-p8" href="#ef-route-grid-riser"/>
+      <use class="ef-pulse ef-p9" href="#ef-route-grid-riser"/>
+      <use class="ef-pulse ef-p10" href="#ef-route-grid-riser"/>
+      <use class="ef-pulse ef-p11" href="#ef-route-grid-riser"/>
+      <use class="ef-pulse ef-p12" href="#ef-route-grid-riser"/>
+      <use class="ef-pulse ef-p13" href="#ef-route-grid-riser"/>
+      <use class="ef-pulse ef-p14" href="#ef-route-grid-riser"/>
+      <use class="ef-pulse ef-p15" href="#ef-route-grid-riser"/>
+      <use class="ef-pulse ef-p16" href="#ef-route-grid-riser"/>
+      <use class="ef-pulse ef-p17" href="#ef-route-grid-riser"/>
+      <use class="ef-pulse ef-p18" href="#ef-route-grid-riser"/>
+      <use class="ef-pulse ef-p19" href="#ef-route-grid-riser"/>
+      <use class="ef-pulse ef-p20" href="#ef-route-grid-riser"/>
+      <use class="ef-pulse ef-p21" href="#ef-route-grid-riser"/>
+      <use class="ef-pulse ef-p22" href="#ef-route-grid-riser"/>
+      <use class="ef-pulse ef-p23" href="#ef-route-grid-riser"/>
+      <use class="ef-pulse ef-p24" href="#ef-route-grid-riser"/>
+      <use class="ef-pulse ef-p25" href="#ef-route-grid-riser"/>
+      <use class="ef-pulse ef-p26" href="#ef-route-grid-riser"/>
+      <use class="ef-pulse ef-p27" href="#ef-route-grid-riser"/>
+      <use class="ef-pulse ef-p28" href="#ef-route-grid-riser"/>
+      <use class="ef-pulse ef-p29" href="#ef-route-grid-riser"/>
+      <use class="ef-pulse ef-p30" href="#ef-route-grid-riser"/>
+      <use class="ef-pulse ef-p31" href="#ef-route-grid-riser"/>
+      <use class="ef-pulse ef-p32" href="#ef-route-grid-riser"/>
+      <use class="ef-pulse ef-p33" href="#ef-route-grid-riser"/>
+      <use class="ef-pulse ef-p34" href="#ef-route-grid-riser"/>
+      <use class="ef-pulse ef-p35" href="#ef-route-grid-riser"/>
+      <use class="ef-pulse ef-p36" href="#ef-route-grid-riser"/>
+      <use class="ef-pulse ef-p37" href="#ef-route-grid-riser"/>
+      <use class="ef-pulse ef-p38" href="#ef-route-grid-riser"/>
+      <use class="ef-pulse ef-p39" href="#ef-route-grid-riser"/>
+      <use class="ef-pulse ef-p40" href="#ef-route-grid-riser"/>
+      <use class="ef-pulse ef-p41" href="#ef-route-grid-riser"/>
+      <use class="ef-pulse ef-p42" href="#ef-route-grid-riser"/>
+      <use class="ef-pulse ef-p43" href="#ef-route-grid-riser"/>
+      <use class="ef-pulse ef-p44" href="#ef-route-grid-riser"/>
+      <use class="ef-pulse ef-p45" href="#ef-route-grid-riser"/>
+      <use class="ef-pulse ef-p46" href="#ef-route-grid-riser"/>
+      <use class="ef-pulse ef-p47" href="#ef-route-grid-riser"/>
+      <use class="ef-pulse ef-p48" href="#ef-route-grid-riser"/>
+      <use class="ef-pulse ef-p49" href="#ef-route-grid-riser"/>
+      <use class="ef-pulse ef-p50" href="#ef-route-grid-riser"/>
+      <use class="ef-pulse ef-p51" href="#ef-route-grid-riser"/>
+    </g>
+    <g clip-path="url(#ef-grid-seam)">
+      <g class="ef-grid-top" style="--ef-junction:-82.34" transform="matrix(0.9398 0.34177 -1.8398 0.395 594 994.4)">
+        <use class="ef-pulse ef-p1" href="#ef-route-grid-top"/>
+        <use class="ef-pulse ef-p2" href="#ef-route-grid-top"/>
+        <use class="ef-pulse ef-p3" href="#ef-route-grid-top"/>
+        <use class="ef-pulse ef-p4" href="#ef-route-grid-top"/>
+        <use class="ef-pulse ef-p5" href="#ef-route-grid-top"/>
+        <use class="ef-pulse ef-p6" href="#ef-route-grid-top"/>
+        <use class="ef-pulse ef-p7" href="#ef-route-grid-top"/>
+        <use class="ef-pulse ef-p8" href="#ef-route-grid-top"/>
+        <use class="ef-pulse ef-p9" href="#ef-route-grid-top"/>
+        <use class="ef-pulse ef-p10" href="#ef-route-grid-top"/>
+        <use class="ef-pulse ef-p11" href="#ef-route-grid-top"/>
+        <use class="ef-pulse ef-p12" href="#ef-route-grid-top"/>
+        <use class="ef-pulse ef-p13" href="#ef-route-grid-top"/>
+        <use class="ef-pulse ef-p14" href="#ef-route-grid-top"/>
+        <use class="ef-pulse ef-p15" href="#ef-route-grid-top"/>
+        <use class="ef-pulse ef-p16" href="#ef-route-grid-top"/>
+        <use class="ef-pulse ef-p17" href="#ef-route-grid-top"/>
+        <use class="ef-pulse ef-p18" href="#ef-route-grid-top"/>
+        <use class="ef-pulse ef-p19" href="#ef-route-grid-top"/>
+        <use class="ef-pulse ef-p20" href="#ef-route-grid-top"/>
+        <use class="ef-pulse ef-p21" href="#ef-route-grid-top"/>
+        <use class="ef-pulse ef-p22" href="#ef-route-grid-top"/>
+        <use class="ef-pulse ef-p23" href="#ef-route-grid-top"/>
+        <use class="ef-pulse ef-p24" href="#ef-route-grid-top"/>
+        <use class="ef-pulse ef-p25" href="#ef-route-grid-top"/>
+        <use class="ef-pulse ef-p26" href="#ef-route-grid-top"/>
+        <use class="ef-pulse ef-p27" href="#ef-route-grid-top"/>
+        <use class="ef-pulse ef-p28" href="#ef-route-grid-top"/>
+        <use class="ef-pulse ef-p29" href="#ef-route-grid-top"/>
+        <use class="ef-pulse ef-p30" href="#ef-route-grid-top"/>
+        <use class="ef-pulse ef-p31" href="#ef-route-grid-top"/>
+        <use class="ef-pulse ef-p32" href="#ef-route-grid-top"/>
+        <use class="ef-pulse ef-p33" href="#ef-route-grid-top"/>
+        <use class="ef-pulse ef-p34" href="#ef-route-grid-top"/>
+        <use class="ef-pulse ef-p35" href="#ef-route-grid-top"/>
+        <use class="ef-pulse ef-p36" href="#ef-route-grid-top"/>
+        <use class="ef-pulse ef-p37" href="#ef-route-grid-top"/>
+        <use class="ef-pulse ef-p38" href="#ef-route-grid-top"/>
+        <use class="ef-pulse ef-p39" href="#ef-route-grid-top"/>
+        <use class="ef-pulse ef-p40" href="#ef-route-grid-top"/>
+        <use class="ef-pulse ef-p41" href="#ef-route-grid-top"/>
+        <use class="ef-pulse ef-p42" href="#ef-route-grid-top"/>
+        <use class="ef-pulse ef-p43" href="#ef-route-grid-top"/>
+        <use class="ef-pulse ef-p44" href="#ef-route-grid-top"/>
+        <use class="ef-pulse ef-p45" href="#ef-route-grid-top"/>
+        <use class="ef-pulse ef-p46" href="#ef-route-grid-top"/>
+        <use class="ef-pulse ef-p47" href="#ef-route-grid-top"/>
+        <use class="ef-pulse ef-p48" href="#ef-route-grid-top"/>
+        <use class="ef-pulse ef-p49" href="#ef-route-grid-top"/>
+        <use class="ef-pulse ef-p50" href="#ef-route-grid-top"/>
+        <use class="ef-pulse ef-p51" href="#ef-route-grid-top"/>
+      </g>
+      <g class="ef-grid-side" style="--ef-junction:-95.24" transform="matrix(0.9398 0.34177 0 1.06406 594 994.4)">
+        <use class="ef-pulse ef-p1" href="#ef-route-grid-side"/>
+        <use class="ef-pulse ef-p2" href="#ef-route-grid-side"/>
+        <use class="ef-pulse ef-p3" href="#ef-route-grid-side"/>
+        <use class="ef-pulse ef-p4" href="#ef-route-grid-side"/>
+        <use class="ef-pulse ef-p5" href="#ef-route-grid-side"/>
+        <use class="ef-pulse ef-p6" href="#ef-route-grid-side"/>
+        <use class="ef-pulse ef-p7" href="#ef-route-grid-side"/>
+        <use class="ef-pulse ef-p8" href="#ef-route-grid-side"/>
+        <use class="ef-pulse ef-p9" href="#ef-route-grid-side"/>
+        <use class="ef-pulse ef-p10" href="#ef-route-grid-side"/>
+        <use class="ef-pulse ef-p11" href="#ef-route-grid-side"/>
+        <use class="ef-pulse ef-p12" href="#ef-route-grid-side"/>
+        <use class="ef-pulse ef-p13" href="#ef-route-grid-side"/>
+        <use class="ef-pulse ef-p14" href="#ef-route-grid-side"/>
+        <use class="ef-pulse ef-p15" href="#ef-route-grid-side"/>
+        <use class="ef-pulse ef-p16" href="#ef-route-grid-side"/>
+        <use class="ef-pulse ef-p17" href="#ef-route-grid-side"/>
+        <use class="ef-pulse ef-p18" href="#ef-route-grid-side"/>
+        <use class="ef-pulse ef-p19" href="#ef-route-grid-side"/>
+        <use class="ef-pulse ef-p20" href="#ef-route-grid-side"/>
+        <use class="ef-pulse ef-p21" href="#ef-route-grid-side"/>
+        <use class="ef-pulse ef-p22" href="#ef-route-grid-side"/>
+        <use class="ef-pulse ef-p23" href="#ef-route-grid-side"/>
+        <use class="ef-pulse ef-p24" href="#ef-route-grid-side"/>
+        <use class="ef-pulse ef-p25" href="#ef-route-grid-side"/>
+        <use class="ef-pulse ef-p26" href="#ef-route-grid-side"/>
+        <use class="ef-pulse ef-p27" href="#ef-route-grid-side"/>
+        <use class="ef-pulse ef-p28" href="#ef-route-grid-side"/>
+        <use class="ef-pulse ef-p29" href="#ef-route-grid-side"/>
+        <use class="ef-pulse ef-p30" href="#ef-route-grid-side"/>
+        <use class="ef-pulse ef-p31" href="#ef-route-grid-side"/>
+        <use class="ef-pulse ef-p32" href="#ef-route-grid-side"/>
+        <use class="ef-pulse ef-p33" href="#ef-route-grid-side"/>
+        <use class="ef-pulse ef-p34" href="#ef-route-grid-side"/>
+        <use class="ef-pulse ef-p35" href="#ef-route-grid-side"/>
+        <use class="ef-pulse ef-p36" href="#ef-route-grid-side"/>
+        <use class="ef-pulse ef-p37" href="#ef-route-grid-side"/>
+        <use class="ef-pulse ef-p38" href="#ef-route-grid-side"/>
+        <use class="ef-pulse ef-p39" href="#ef-route-grid-side"/>
+        <use class="ef-pulse ef-p40" href="#ef-route-grid-side"/>
+        <use class="ef-pulse ef-p41" href="#ef-route-grid-side"/>
+        <use class="ef-pulse ef-p42" href="#ef-route-grid-side"/>
+        <use class="ef-pulse ef-p43" href="#ef-route-grid-side"/>
+        <use class="ef-pulse ef-p44" href="#ef-route-grid-side"/>
+        <use class="ef-pulse ef-p45" href="#ef-route-grid-side"/>
+        <use class="ef-pulse ef-p46" href="#ef-route-grid-side"/>
+        <use class="ef-pulse ef-p47" href="#ef-route-grid-side"/>
+        <use class="ef-pulse ef-p48" href="#ef-route-grid-side"/>
+        <use class="ef-pulse ef-p49" href="#ef-route-grid-side"/>
+        <use class="ef-pulse ef-p50" href="#ef-route-grid-side"/>
+        <use class="ef-pulse ef-p51" href="#ef-route-grid-side"/>
+      </g>
+    </g>
+  </g>
   <use href="#ef-rail-grid" class="ef-pipe-shade"/>
 </g>
 <path d="M850 1087.5L962 1128.2" fill="none" stroke="url(#ef-grid-fade)" stroke-width="15"/>
@@ -1291,6 +2274,7 @@
 <path d="M771 815.5 836.5 800 836.5 855.8 771 871.7Z" opacity=".92"/>
 <path d="M852.5 796.3 917.5 781 917.5 836.2 852.5 851.9Z" opacity=".95"/>
 </g>
+<path id="ef-room-dark" d="M771 744.2 836.5 729.4 836.5 785.2 771 800.5ZM852.5 725.8 917.5 711.1 917.5 766.3 852.5 781.4ZM771 815.5 836.5 800 836.5 855.8 771 871.7ZM852.5 796.3 917.5 781 917.5 836.2 852.5 851.9Z" fill="#14161b"/>
 <clipPath id="ef-window-panes"><path d="M771 744.2 836.5 729.4 836.5 785.2 771 800.5ZM852.5 725.8 917.5 711.1 917.5 766.3 852.5 781.4ZM771 815.5 836.5 800 836.5 855.8 771 871.7ZM852.5 796.3 917.5 781 917.5 836.2 852.5 851.9Z"/></clipPath>
 <filter id="ef-xmas-frost" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="2.6"/></filter>
 <radialGradient id="ef-xmas-room" gradientUnits="userSpaceOnUse" cx="830" cy="800" r="110"><stop offset="0" stop-color="#ffd08a"/><stop offset=".6" stop-color="#f2ac62"/><stop offset="1" stop-color="#c97a3c"/></radialGradient>
@@ -1657,6 +2641,330 @@
         <use class="ef-pulse ef-p51" href="#ef-route-b1"/>
       </g>
     </g>
+    <g id="ef-f-b1-2" transform="matrix(1 -0.2147 0 1 0 0)" class="ef-flow" data-route="ef-route-b1" data-junction-end="" data-flow="out" style="--ef-source-color:var(--ef-b1-color,#4dbd80)">
+      <g class="ef-front" transform="translate(0 1.1)">
+        <use class="ef-pulse ef-p1" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p2" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p3" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p4" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p5" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p6" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p7" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p8" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p9" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p10" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p11" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p12" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p13" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p14" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p15" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p16" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p17" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p18" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p19" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p20" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p21" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p22" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p23" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p24" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p25" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p26" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p27" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p28" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p29" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p30" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p31" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p32" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p33" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p34" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p35" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p36" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p37" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p38" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p39" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p40" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p41" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p42" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p43" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p44" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p45" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p46" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p47" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p48" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p49" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p50" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p51" href="#ef-route-b1"/>
+      </g>
+      <g class="ef-top" transform="translate(0 976.13) matrix(1 0 1.76 1 0 0) translate(0 -981.53)">
+        <use class="ef-pulse ef-p1" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p2" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p3" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p4" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p5" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p6" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p7" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p8" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p9" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p10" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p11" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p12" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p13" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p14" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p15" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p16" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p17" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p18" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p19" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p20" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p21" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p22" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p23" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p24" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p25" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p26" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p27" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p28" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p29" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p30" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p31" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p32" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p33" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p34" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p35" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p36" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p37" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p38" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p39" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p40" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p41" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p42" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p43" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p44" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p45" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p46" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p47" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p48" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p49" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p50" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p51" href="#ef-route-b1"/>
+      </g>
+    </g>
+    <g id="ef-f-b1-3" transform="matrix(1 -0.2147 0 1 0 0)" class="ef-flow" data-route="ef-route-b1" data-junction-end="" data-flow="out" style="--ef-source-color:var(--ef-b1-color,#4dbd80)">
+      <g class="ef-front" transform="translate(0 1.1)">
+        <use class="ef-pulse ef-p1" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p2" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p3" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p4" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p5" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p6" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p7" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p8" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p9" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p10" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p11" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p12" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p13" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p14" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p15" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p16" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p17" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p18" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p19" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p20" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p21" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p22" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p23" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p24" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p25" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p26" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p27" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p28" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p29" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p30" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p31" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p32" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p33" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p34" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p35" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p36" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p37" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p38" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p39" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p40" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p41" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p42" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p43" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p44" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p45" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p46" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p47" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p48" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p49" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p50" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p51" href="#ef-route-b1"/>
+      </g>
+      <g class="ef-top" transform="translate(0 976.13) matrix(1 0 1.76 1 0 0) translate(0 -981.53)">
+        <use class="ef-pulse ef-p1" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p2" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p3" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p4" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p5" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p6" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p7" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p8" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p9" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p10" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p11" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p12" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p13" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p14" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p15" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p16" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p17" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p18" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p19" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p20" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p21" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p22" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p23" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p24" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p25" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p26" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p27" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p28" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p29" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p30" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p31" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p32" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p33" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p34" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p35" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p36" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p37" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p38" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p39" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p40" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p41" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p42" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p43" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p44" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p45" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p46" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p47" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p48" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p49" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p50" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p51" href="#ef-route-b1"/>
+      </g>
+    </g>
+    <g id="ef-f-b1-4" transform="matrix(1 -0.2147 0 1 0 0)" class="ef-flow" data-route="ef-route-b1" data-junction-end="" data-flow="out" style="--ef-source-color:var(--ef-b1-color,#4dbd80)">
+      <g class="ef-front" transform="translate(0 1.1)">
+        <use class="ef-pulse ef-p1" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p2" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p3" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p4" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p5" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p6" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p7" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p8" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p9" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p10" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p11" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p12" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p13" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p14" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p15" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p16" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p17" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p18" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p19" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p20" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p21" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p22" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p23" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p24" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p25" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p26" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p27" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p28" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p29" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p30" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p31" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p32" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p33" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p34" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p35" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p36" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p37" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p38" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p39" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p40" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p41" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p42" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p43" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p44" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p45" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p46" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p47" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p48" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p49" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p50" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p51" href="#ef-route-b1"/>
+      </g>
+      <g class="ef-top" transform="translate(0 976.13) matrix(1 0 1.76 1 0 0) translate(0 -981.53)">
+        <use class="ef-pulse ef-p1" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p2" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p3" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p4" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p5" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p6" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p7" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p8" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p9" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p10" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p11" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p12" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p13" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p14" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p15" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p16" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p17" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p18" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p19" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p20" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p21" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p22" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p23" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p24" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p25" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p26" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p27" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p28" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p29" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p30" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p31" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p32" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p33" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p34" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p35" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p36" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p37" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p38" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p39" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p40" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p41" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p42" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p43" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p44" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p45" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p46" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p47" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p48" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p49" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p50" href="#ef-route-b1"/>
+        <use class="ef-pulse ef-p51" href="#ef-route-b1"/>
+      </g>
+    </g>
     <use href="#ef-rail-b1" class="ef-pipe-shade"/>
   </g>
 </g>
@@ -1699,23 +3007,26 @@
 </g>
 
 <!-- labels -->
-<path class="ef-lead" id="ef-solar-lead" d="M445 244V585"/>
+<path class="ef-lead" id="ef-solar-lead" d="M540 244V585"/>
 <path class="ef-lead" d="M844.5 369V722"/>
 <path class="ef-lead" id="ef-b1-lead" d="M388 1068V1132"/>
 <path class="ef-lead" id="ef-b2-lead" d="M495 1043.4V1132"/>
-<path class="ef-lead" d="M895 1120V1132"/>
-<path class="ef-lead" id="ef-ev-lead" d="M56 369V786"/>
+<path class="ef-lead" id="ef-grid-lead" d="M895 1132V1072"/>
+<path class="ef-lead" id="ef-ev-lead" d="M102 369V796"/>
+<!-- What a tap opens or shuts: the garage doorway and the window (see the card) -->
+<path id="ef-tap-garage" class="ef-tap" d="M0 714 235 797.5 235 1047.5 0 964Z"/>
+<path id="ef-tap-window" class="ef-tap" d="M757 734.5 931.5 695.3 931.5 850.3 757 893Z"/>
 <g id="ef-labels">
 <g id="ef-solar-label">
-<text x="445.5" y="174" class="ef-cap" text-anchor="middle" id="ef-solar-name">SOLAR</text>
-<text x="445.5" y="228" class="ef-val" text-anchor="middle" id="ef-solar">0.3 kW</text>
+<text x="540.5" y="174" class="ef-cap" text-anchor="middle" id="ef-solar-name">SOLAR</text>
+<text x="540.5" y="228" class="ef-val" text-anchor="middle" id="ef-solar">0.3 kW</text>
 </g>
 <text x="844.5" y="299.5" class="ef-cap" text-anchor="middle" id="ef-home-name">HOME</text>
 <text x="844.5" y="353" class="ef-val" text-anchor="middle" id="ef-home">1.0 kW</text>
 <foreignObject id="ef-extras" x="534" y="252" width="621" height="0" display="none"><div xmlns="http://www.w3.org/1999/xhtml" class="ef-extras"></div></foreignObject>
 <g id="ef-ev-label">
-<text x="52.5" y="299.5" class="ef-cap" id="ef-ev-name">EV</text>
-<text x="52" y="353" class="ef-val ef-idle" id="ef-ev">0 kW</text>
+<text x="98.5" y="299.5" class="ef-cap" id="ef-ev-name">EV</text>
+<text x="98" y="353" class="ef-val"><tspan id="ef-ev">3.7 kW</tspan><tspan id="ef-ev-dir" class="ef-dir" style="fill:var(--ef-ev-dir,#b49cef)" dx="8" dy="-6">▲</tspan><tspan id="ef-ev-soc" dx="7" dy="6">64%</tspan></text>
 </g>
 <g id="ef-b1-label">
 <text x="391.5" y="1168" class="ef-cap" text-anchor="end" id="ef-b1-name">BATTERY 1</text>
@@ -1725,7 +3036,9 @@
 <text x="492.5" y="1168" class="ef-cap" id="ef-b2-name">BATTERY 2</text>
 <text x="492" y="1222" class="ef-val" text-anchor="start"><tspan id="ef-b2">0.2 kW</tspan><tspan id="ef-b2-dir" class="ef-dir" style="fill:var(--ef-b2-dir,#62b4f7)" dx="8" dy="-6">▼</tspan><tspan id="ef-b2-soc" dx="7" dy="6">54%</tspan></text>
 </g>
+<g id="ef-grid-label">
 <text x="892.5" y="1168" class="ef-cap" id="ef-grid-name">GRID</text>
 <text x="892" y="1222" class="ef-val ef-idle" id="ef-grid">0 kW</text>
+</g>
 </g>
 </svg>

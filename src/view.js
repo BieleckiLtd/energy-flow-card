@@ -4,10 +4,13 @@
 const FLOW_MIN = 50;  // watts: less than this reads as "0 kW" and draws no flow
 const PULSE_SPEED = 125;  // SVG units per second on every wire
 const SHORTEST_CYCLE = 275;  // very short routes should not flash rapidly
+const LANE_FADE = 700;  // ms: a lane going away has faded (.ef-line's .55 s slide and .4 s fade in the svg)
 const LANE_GAP = 19;  // between neighbouring lanes on the wall, in the picture's own units
 const MOON_RADIUS = 22;
 const HORIZON = -.27;  // the apparent centre is just below the horizon when the upper edge rises
-const GRID_FLOWS = ["grid", "grid2", "grid3"];
+const GRID_FLOWS = ["grid", "grid2", "grid3", "grid4"];
+const EV_FLOWS = ["ev", "ev2", "ev3", "ev4"];
+const B1_FLOWS = ["b1", "b1-2", "b1-3", "b1-4"], B2_FLOWS = ["b2", "b2-2", "b2-3", "b2-4"];
 const HOT = 30;  // °C: above this the air shimmers
 const FROST_START = 3;  // °C: frost begins to form here...
 const FROST_FULL = -10;  // ...and is fully grown here
@@ -22,12 +25,51 @@ const PICTURE_WEATHER = { clear: "clear", partly: "cloudy", cloudy: "cloudy", fo
 // Snow showers let some sky through, so a winter moon still shows.
 const SKY_VISIBILITY = { clear: 1, partly: .62, cloudy: .12, snow: .5 };
 
+// Where each lane into the house sits (LANE_GAP apart, 0 = in line with battery 1's pipe), given which sources feed
+// the house; b2Alone: battery 2 busy and battery 1 not, so a lone line runs in line with battery 2's pipe. Lanes that
+// do not run get the place they would take, for their fade. Five lanes do not fit (places -1 to 2): with both
+// batteries feeding and one lane too many, the batteries share battery 1's line and the car takes battery 2's place.
+export function housePlaces(fed, b2Alone) {
+  const ORDER = ["solar", "b1", "b2", "grid", "ev"], SHARED = ["solar", "b1", "ev", "grid"];
+  const plan = (share) => {
+    const order = share ? SHARED : ORDER, list = order.filter((k) => fed[k]);
+    const count = list.length;
+    let anchor = 0, at = count <= 1 && b2Alone ? 1 : 0;  // the first lane, at the top place
+    if (list.includes("b1")) [anchor, at] = [list.indexOf("b1"), 0];
+    else if (list.includes("b2")) [anchor, at] = [list.indexOf("b2"), 1];
+    const places = {};
+    list.forEach((k, i) => { places[k] = at + i - anchor; });
+    if (share) places.b2 = places.b1;
+    return places;
+  };
+  let share = false, places = plan(false);
+  const lowest = () => Math.max(0, ...Object.values(places));
+  if (lowest() > 2 && fed.b1 && fed.b2) { share = true; places = plan(true); }
+  const shift = Math.max(0, lowest() - 2);  // still too low: all up
+  for (const k of Object.keys(places)) places[k] -= shift;
+  // the rest, where they would come and go: solar on top, the batteries at their pipes, the grid and the car below
+  const top = Math.min(0, ...Object.values(places)), bottom = Math.min(2, lowest() + 1);
+  const idle = Object.keys(places).length ? null : (b2Alone ? 1 : 0);
+  places.solar ??= Math.max(-1, top - 1);
+  places.b1 ??= 0;
+  places.b2 ??= 1;
+  places.grid ??= idle ?? bottom;
+  places.ev ??= idle ?? bottom;
+  return { places, share };
+}
+
+// 6 December to 6 January
+export function christmasSeason(time) {
+  const day = new Date(time ?? Date.now()), md = (day.getMonth() + 1) * 100 + day.getDate();
+  return md >= 1206 || md <= 106;
+}
+
 export const DEFAULTS = {
   solar: { show: true, name: "Solar", color: "#d6a62c" },
   home: { name: "Home" },
-  ev: { name: "EV" },
+  ev: { name: "EV", color: "#9b7bea" },
   grid: { name: "Grid", color: "#cfd3d6" },
-  battery1: { name: "Battery 1", color: "#4dbd80", face: "#eeeeee" },
+  battery1: { show: true, name: "Battery 1", color: "#4dbd80", face: "#eeeeee" },
   battery2: { show: true, name: "Battery 2", color: "#4aa5f2", face: "#4b4e54" },
   look: { glass: "#2d334d", roof: "#333333", wall: "#0a0a0a", window: "#d6d3ca", background: "#17181a" },
 };
@@ -71,6 +113,7 @@ function colorVars(cfg) {
   };
   set("solar", "color", (c) => ({ "--ef-solar-color": c }));
   set("grid", "color", (c) => ({ "--ef-grid-color": c }));
+  set("ev", "color", (c) => ({ "--ef-ev-color": c, "--ef-ev-dir": mix(c, "#ffffff", .25) }));
   for (const n of [1, 2]) {
     set(`battery${n}`, "color", (c) => ({
       [`--ef-b${n}-color`]: c, [`--ef-b${n}-dir`]: mix(c, "#ffffff", .25),
@@ -123,7 +166,7 @@ const SHIMMER_FADE = 600;  // ms to cross-fade a new snapshot in
 // background is sampled again only when the look changes (weather, night, decorations, colours) or after this long
 // (ms): the sun, the light and the clouds move slowly enough.
 const RESAMPLE = 60000;
-const TRANSIENT = new Set(["ef-paused", "ef-baked", "ef-still", "ef-restart", "ef-garage-moving"]);
+const TRANSIENT = new Set(["ef-paused", "ef-baked", "ef-still", "ef-restart", "ef-garage-moving", "ef-relabel", "ef-swap"]);
 const lookKey = (svg) => [...svg.classList].filter((c) => !TRANSIENT.has(c)).join(" ")
   + "|" + svg.getAttribute("data-weather") + "|" + svg.getAttribute("data-time");
 
@@ -212,9 +255,12 @@ class HeatShimmer {
   }
 
   destroy() {
+    if (this.dead) return;  // once: a lost context fires again on a renderer already gone
+    this.dead = true;
     this.hide();
     this.failed = true;
     this.resizer?.disconnect();
+    this.gl?.getExtension("WEBGL_lose_context")?.loseContext();
     this.canvas.remove();
   }
 
@@ -290,7 +336,8 @@ class HeatShimmer {
   }
 
   // Snapshot again on the next update, e.g. after new colours.
-  invalidate() { this.markup = null; }
+  // The snapshot in use stays: one that comes out the same (a name changed, say) is not drawn and uploaded again.
+  invalidate() { this.key = null; }
 
   upload(image) {
     const gl = this.gl;
@@ -417,8 +464,9 @@ void main(){
   a*=1.-texture2D(u_mask,(v_svg-u_box.xy)/u_box.zw).a;
   gl_FragColor=vec4(u_color*a,a);
 }`;
-const PULSE_BOX = [300, 640, 700, 520];  // x, y, width, height: where pulses can be, in the picture's units
+const PULSE_BOX = [0, 640, 1000, 520];  // x, y, width, height: where pulses can be, in the picture's units
 const MASK_WAIT = 700;  // ms after a change before the masks are drawn again (lanes slide for .55 s)
+const CONFIG_SETTLE = 400;  // ms without a config change before the picture is sampled again
 
 class PulseRenderer {
   constructor(view) {
@@ -476,7 +524,7 @@ class PulseRenderer {
         groups.get(dash.parentNode).push(dash);
       }
       // Pulses at one depth in the picture share a mask: everything drawn after the first of them.
-      const level = flow.closest("#ef-lines, .ef-grid-pipe, #ef-solar-drop") || flow;
+      const level = flow.closest("#ef-lines, .ef-grid-pipe, #ef-solar-drop, #ef-ev-drop, #ef-l-b1, #ef-l-b2") || flow;
       if (!levels.has(level)) levels.set(level, { first: flow, texture: null });
       for (const [group, dashes] of groups) {
         const clipHost = group.closest("[clip-path]");
@@ -592,6 +640,8 @@ class PulseRenderer {
       piece.color = this.rgb(getComputedStyle(piece.dashes[0]).stroke);
       piece.matrix = this.toPicture(piece.group);
       if (!piece.matrix) piece.shown = false;
+      // taken where the lane is now, which may be the start of its slide: drawn frames take it again (below)
+      piece.moving = true;
     }
     if (!this.canvas.isConnected) {
       const host = this.svg.parentNode;
@@ -636,35 +686,56 @@ class PulseRenderer {
     const key = `${lookKey(this.svg)}|${lanes}|${this.canvas.width}`;
     if (key === this.maskKey && performance.now() - this.maskAt < RESAMPLE) return;
     this.maskKey = key;
-    clearTimeout(this.maskTimer);
-    this.maskTimer = setTimeout(() => this.drawMasks().catch(() => this.destroy()), this.ready ? MASK_WAIT : 0);
+    // One redraw waits or runs at a time and draws the picture as it is when it runs: readings coming in meanwhile
+    // (Home Assistant sends one for every state change in the house) do not put it off; one during a run asks for
+    // one more after it.
+    if (this.maskBusy) { this.maskAgain = true; return; }
+    if (this.maskTimer) return;
+    this.maskTimer = setTimeout(async () => {
+      this.maskTimer = 0;
+      this.maskBusy = true;
+      try { await this.drawMasks(); } catch { this.destroy(); return; } finally { this.maskBusy = false; }
+      if (this.maskAgain) { this.maskAgain = false; this.maskKey = null; this.scheduleMasks(); }
+    }, this.ready ? MASK_WAIT : 0);
   }
 
   async drawMasks() {
     if (this.failed || !this.canvas.width) return;
+    const run = this.maskRun = (this.maskRun || 0) + 1;  // a later run supersedes this one
     const box = this.box = PULSE_BOX, scale = this.canvas.width / 1170;
     const width = Math.max(1, Math.round(box[2] * scale)), height = Math.max(1, Math.round(box[3] * scale));
-    const ids = (el) => { const all = [...this.svg.querySelectorAll("*")]; return all.indexOf(el); };
-    for (const level of this.levels) {
-      const clone = this.svg.cloneNode(true);
-      clone.classList.remove("ef-baked", "ef-gl", "ef-paused", "ef-still");
-      clone.style.removeProperty("position");
-      const all = [...clone.querySelectorAll("*")], first = all[ids(level.first)];
-      const drop = [], defs = clone.querySelector("defs");
-      const used = new Set([...clone.querySelectorAll("use")].map((u) => u.getAttribute("href")?.slice(1)));
-      for (const el of all) {
-        if (el.closest("defs, clipPath, mask, linearGradient, radialGradient, filter, pattern, style")) continue;
-        const position = el.compareDocumentPosition(first);
+    // One copy of the picture serves every depth (a copy each was a lot of memory on a small device). The depths
+    // come in the picture's own order, so each drops all that the one before dropped and more: the copy is stripped
+    // further for each. What goes is settled from the elements' places in the whole copy, taken before any is gone.
+    const clone = this.svg.cloneNode(true);
+    clone.classList.remove("ef-baked", "ef-gl", "ef-paused", "ef-still");
+    clone.style.removeProperty("position");
+    clone.setAttribute("viewBox", box.join(" "));
+    clone.setAttribute("width", width);
+    clone.setAttribute("height", height);
+    const live = [...this.svg.querySelectorAll("*")], all = [...clone.querySelectorAll("*")];
+    const defs = clone.querySelector("defs");
+    const used = new Set([...clone.querySelectorAll("use")].map((u) => u.getAttribute("href")?.slice(1)));
+    const kept = all.map((el) => !!el.closest("defs, clipPath, mask, linearGradient, radialGradient, filter, pattern, style"));
+    // what never covers a pipe (a pipe's body lies under its own pulses and never over another's)
+    const never = all.map((el) => el.matches(".ef-flow, .ef-pulse, .ef-lane, #ef-rain, #ef-snow, #ef-labels, .ef-lead, #ef-flash"));
+    const pulse = all.map((el) => el.matches(".ef-flow, .ef-pulse"));
+    const firsts = this.levels.map((level) => {
+      const at = live.indexOf(level.first), holders = new Set();
+      for (let el = all[at]; el; el = el.parentNode) holders.add(el);
+      return { at, holders };
+    });
+    const gone = new Set();
+    for (const [n, level] of this.levels.entries()) {
+      const { at, holders } = firsts[n];
+      all.forEach((el, i) => {
+        if (kept[i] || gone.has(el)) return;
         // before the pulses (and not holding any of them), or pulses themselves, or what never covers a pipe
-        if ((position & Node.DOCUMENT_POSITION_FOLLOWING && !(position & Node.DOCUMENT_POSITION_CONTAINED_BY)) || el === first
-          // (a pipe's body lies under its own pulses and never over another's)
-          || el.matches(".ef-flow, .ef-pulse, .ef-lane, #ef-rain, #ef-snow, #ef-labels, .ef-lead, #ef-flash")) drop.push(el);
-      }
-      // something a later <use> draws stays, out of sight in <defs>
-      for (const el of drop) { if (el.id && used.has(el.id) && !el.matches(".ef-flow, .ef-pulse")) defs.append(el); else el.remove(); }
-      clone.setAttribute("viewBox", box.join(" "));
-      clone.setAttribute("width", width);
-      clone.setAttribute("height", height);
+        if (!((i < at && !holders.has(el)) || i === at || never[i])) return;
+        gone.add(el);
+        // something a later <use> draws stays, out of sight in <defs>
+        if (el.id && used.has(el.id) && !pulse[i]) defs.append(el); else el.remove();
+      });
       const url = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(clone)], { type: "image/svg+xml" }));
       try {
         const image = new Image();
@@ -672,7 +743,7 @@ class PulseRenderer {
         await image.decode();
         let source = image;
         if (typeof createImageBitmap === "function") source = await createImageBitmap(image).catch(() => image);
-        if (this.failed) return;
+        if (this.failed || run !== this.maskRun) return;
         const gl = this.gl;
         level.texture ??= this.texture();
         gl.bindTexture(gl.TEXTURE_2D, level.texture);
@@ -699,10 +770,16 @@ class PulseRenderer {
   }
 
   destroy() {
+    if (this.dead) return;  // once: a lost context fires again on a renderer already gone
+    this.dead = true;
     cancelAnimationFrame(this.raf);
     clearTimeout(this.maskTimer);
     this.failed = true;
-    this.svg.classList.remove("ef-gl");  // the svg's own pulses again
+    this.gl?.getExtension("WEBGL_lose_context")?.loseContext();
+    this.svg.classList.remove("ef-gl");  // the svg's own pulses again, started in step
+    this.view.restartBeats();
+    this.view.flushBeats();
+    this.view.alignBeats();
     this.resizer?.disconnect();
     this.canvas.remove();
   }
@@ -716,16 +793,21 @@ class PulseRenderer {
     gl.uniform1f(u.u_aa, 1170 / this.canvas.width);
     gl.uniform4f(u.u_box, ...this.box);
     gl.activeTexture(gl.TEXTURE0);
+    const lines = new Map();  // each lane looked at once a frame: [moving, opacity]
     for (const piece of this.pieces) {
       if (!piece.shown) continue;
       let alpha = 1;
       if (piece.line) {
-        // a lane that comes or goes fades and slides (CSS transitions): follow it while it moves
-        const moving = piece.line.getAnimations?.().length > 0;
+        // a lane that comes or goes fades and slides (CSS transitions): follow it while it moves, and once more
+        // after a reading, as a slide that ran while no frames were drawn (tab in the background) is over by now
+        if (!lines.has(piece.line)) {
+          const ls = getComputedStyle(piece.line);
+          lines.set(piece.line, [piece.line.getAnimations?.().length > 0, ls.visibility === "hidden" ? 0 : parseFloat(ls.opacity)]);
+        }
+        const [moving, opacity] = lines.get(piece.line);
         if (moving || piece.moving) piece.matrix = this.toPicture(piece.group) || piece.matrix;
         piece.moving = moving;
-        const ls = getComputedStyle(piece.line);
-        alpha = ls.visibility === "hidden" ? 0 : parseFloat(ls.opacity);
+        alpha = opacity;
         if (!alpha) continue;
       }
       const m = piece.matrix;
@@ -881,8 +963,39 @@ export class EnergyFlowView {
     this.motionHint();
   }
 
+  // Off the page (Home Assistant keeps cards it may show again): everything pauses, and the page's events stop
+  // holding on to the picture, so a card that is thrown away can go, GPU contexts and all. resume() carries on with
+  // the same renderers.
+  suspend() {
+    if (this.suspended) return;
+    this.suspended = true;
+    document.removeEventListener("visibilitychange", this.onVisibility);
+    this.observer?.disconnect();
+    removeEventListener(EFFECTS_KEY, this.onEffects);
+    this.motion.removeEventListener?.("change", this.onMotion);
+    this.watch.stop();
+    this.svg.classList.add("ef-paused");
+    this.shimmer?.sync();
+    this.pulses?.sync();
+  }
+
+  resume() {
+    if (!this.suspended) return;
+    this.suspended = false;
+    document.addEventListener("visibilitychange", this.onVisibility);
+    this.observer?.observe(this.svg);
+    addEventListener(EFFECTS_KEY, this.onEffects);
+    this.motion.addEventListener?.("change", this.onMotion);
+    this.applyEffects();
+    this.restWhenUnseen();  // pauses again only if off screen or hidden
+    this.motionHint();
+  }
+
   destroy() {
     clearTimeout(this.garageMoving);
+    clearTimeout(this.relabel);
+    clearTimeout(this.settle);
+    for (const timer of Object.values(this.goneTimers || {})) clearTimeout(timer);
     document.removeEventListener("visibilitychange", this.onVisibility);
     this.observer?.disconnect();
     removeEventListener(EFFECTS_KEY, this.onEffects);
@@ -916,8 +1029,9 @@ export class EnergyFlowView {
     this.cfg = cfg;
     const svg = this.svg;
     svg.classList.toggle("ef-no-solar", !cfg.solar.show);
+    svg.classList.toggle("ef-no-b1", !cfg.battery1.show);
     svg.classList.toggle("ef-no-b2", !cfg.battery2.show);
-    this.placeLabels(cfg.battery2.show);  // battery 1 is always there
+    this.placeLabels(cfg.battery1.show && cfg.battery2.show);
     const name = (id, value) => this.text(id, String(value ?? "").toUpperCase(), null);
     name("ef-solar-name", cfg.solar.name);
     name("ef-home-name", cfg.home.name);
@@ -930,23 +1044,64 @@ export class EnergyFlowView {
     for (const [key, value] of Object.entries(vars)) svg.style.setProperty(key, value);
     this.colorKeys = Object.keys(vars);
     this.colors = {
-      solar: cfg.solar.color, grid: cfg.grid.color, b1: cfg.battery1.color, b2: cfg.battery2.color,
+      solar: cfg.solar.color, grid: cfg.grid.color, b1: cfg.battery1.color, b2: cfg.battery2.color, ev: cfg.ev.color,
     };
-    this.contrastKey = null;
+    this.alignLabels();  // names change the widths
     this.applyEffects();
-    this.shimmer?.invalidate();
+    // The editor sends the config again on every keystroke, and each snapshot of the picture costs a small device
+    // dearly: after the first config they are taken again only once the changes stop coming.
+    clearTimeout(this.settle);
+    if (this.configured) this.settle = setTimeout(() => this.resample(), CONFIG_SETTLE);
+    else { this.configured = true; this.resample(); }
+  }
+
+  // The snapshots of the picture (label contrast, the shimmer's still parts) again, after new names or colours.
+  resample() {
+    this.contrastKey = null;
     this.scheduleLabelContrast();
+    this.shimmer?.invalidate();
+    if (this.svg.classList.contains("ef-hot")) this.shimmer?.refresh();
+  }
+
+  // Thrown away (off the page for good): the GPU contexts go now, not when the browser gets round to collecting
+  // them. Should the picture come back after all, the renderers are made again with the next readings.
+  release() {
+    clearTimeout(this.settle);
+    this.shimmer?.destroy();
+    this.shimmer = null;
+    this.pulses?.destroy();
+    this.pulses = null;
   }
 
   // Two batteries share the bottom row: battery 1 right of its leader, battery 2 and the grid left of theirs.
-  // With battery 1 alone there is room, so each label is centred on its leader, as solar and home are.
+  // With one battery or none there is room, so each label is centred on its leader, as solar and home are.
+  // The texts stay where they are drawn and slide (a transform, so it can animate) to their centres; the slide
+  // animates only when the layout changes, not when a reading changes a label's width.
   placeLabels(both) {
     this.labelPlaces ??= [...this.svg.querySelectorAll("#ef-b1-label text, #ef-b2-label text, #ef-grid-name, #ef-grid")]
-      .map((el) => ({ el, x: el.getAttribute("x"), anchor: el.getAttribute("text-anchor") || "start",
+      .map((el) => ({ el, x: Number(el.getAttribute("x")), anchor: el.getAttribute("text-anchor") || "start",
         centre: el.closest("#ef-b1-label") ? 388 : el.closest("#ef-b2-label") ? 495 : 895 }));
-    for (const { el, x, anchor, centre } of this.labelPlaces) {
-      this.attr(el, "x", both ? x : centre);
-      this.attr(el, "text-anchor", both ? anchor : "middle");
+    if (this.bothBatteries !== undefined && this.bothBatteries !== both && !this.svg.classList.contains("ef-still")) {
+      this.svg.classList.add("ef-relabel");
+      clearTimeout(this.relabel);
+      this.relabel = setTimeout(() => this.svg.classList.remove("ef-relabel"), 700);
+    }
+    this.bothBatteries = both;
+    this.alignLabels();
+  }
+
+  alignLabels() {
+    for (const place of this.labelPlaces || []) {
+      const { el, x, anchor, centre } = place;
+      let shift = 0;
+      if (!this.bothBatteries) {
+        const w = el.getClientRects().length ? el.getBBox().width : 0;
+        shift = anchor === "end" ? centre + w / 2 - x : anchor === "middle" ? centre - x : centre - w / 2 - x;
+      }
+      shift = Math.round(shift * 10) / 10;
+      if (place.shift === shift) continue;
+      place.shift = el.shift = shift;
+      el.style.transform = shift ? `translateX(${shift}px)` : "";
     }
   }
 
@@ -1101,14 +1256,31 @@ export class EnergyFlowView {
 
   // A lane on the wall is there only while power runs in it. It fades and slides half a place as it comes and
   // goes (CSS transitions in the svg); `place` is how many lanes down from its drawn position it sits.
-  line(lane, way, place = 0, color) {
-    const el = this.part(`ef-l-${lane}`);
-    el.classList.toggle("ef-gone", !way);
-    el.style.transform = `translateY(${(way ? place : place - 0.5) * LANE_GAP}px)`;
-    if (way) this.pulse(lane, way, color);  // a lane on its way out keeps its pulse while it fades
+  // stay: the lane is drawn when idle too (the batteries'), with no pulses on it. withPulse false: the caller sets
+  // the lane's pulses itself (turnLanes).
+  line(lane, way, place = 0, color, stay = false, withPulse = true) {
+    const el = this.part(`ef-l-${lane}`), gone = !way && !stay;
+    el.classList.toggle("ef-gone", gone);
+    el.style.transform = `translateY(${(gone ? place - 0.5 : place) * LANE_GAP}px)`;
+    if (!gone && withPulse) this.pulse(lane, way, color);
+    // A lane on its way out keeps its pulses while it fades, then they stop: hidden, they would still be animated
+    // (and drawn, at no opacity, on the pulse layer).
+    // Armed once as the lane goes, so readings coming in while it fades do not keep putting it off.
+    this.goneTimers ??= {};
+    if (!gone) {
+      clearTimeout(this.goneTimers[lane]);
+      delete this.goneTimers[lane];
+    } else if (!this.goneTimers[lane] && this.part(`ef-f-${lane}`).dataset.flow !== "off") {
+      this.goneTimers[lane] = setTimeout(() => {
+        delete this.goneTimers[lane];
+        if (!el.classList.contains("ef-gone")) return;
+        this.pulse(lane, false);
+        this.pulses?.update();
+      }, LANE_FADE);
+    }
   }
 
-  // The grid pipe's sources, [way, colour] each. Up to three share the one lane by taking turns: each flow carries
+  // The grid pipe's sources, [way, colour] each. Up to four share the one lane by taking turns: each flow carries
   // every n-th pulse (--ef-turns in the svg). A change in their number restarts the beat, as iOS Safari would
   // otherwise keep the old timing.
   gridLanes(flows) {
@@ -1124,6 +1296,28 @@ export class EnergyFlowView {
     this.restartBeats();
   }
 
+  // A flow taking turns with others on one line: every `turns`-th pulse, shifted by `turn`.
+  turnStyle(name, turns, turn) {
+    const el = this.part(`ef-f-${name}`);
+    if (turns > 1) { el.style.setProperty("--ef-turns", turns); el.style.setProperty("--ef-turn", turn); }
+    else { el.style.removeProperty("--ef-turns"); el.style.removeProperty("--ef-turn"); }
+  }
+
+  // Something charged from several sources (the car, a battery): one flow per source (up to four), taking turns on
+  // its line, in their colours.
+  turnLanes(names, way, colors) {
+    const flows = way ? colors.slice(0, names.length) : [];
+    names.forEach((name, i) => {
+      this.turnStyle(name, flows.length, i);
+      this.pulse(name, i < Math.max(1, flows.length) && way, flows[i] || colors[0]);
+    });
+    this.turns ??= {};
+    const turns = Math.max(1, flows.length);  // none or one: the same timing
+    if (turns === this.turns[names[0]]) return;
+    this.turns[names[0]] = turns;
+    this.restartBeats();
+  }
+
   updatePulseCadence() {
     let incoming = 0, outgoing = 0;
     for (const { lane, length, junctionEnd } of this.cadenceRoutes) {
@@ -1136,8 +1330,14 @@ export class EnergyFlowView {
     const distance = Math.max(SHORTEST_CYCLE, incoming + outgoing);
     if (distance === this.cycleDistance) return;
     const now = document.timeline?.currentTime ?? performance.now();
-    // Keep the pulses where they are: the beat is PULSE_SPEED units a second since beatStart, wrapped at the cycle.
-    if (this.cycleDistance) this.beatStart = now - (((now - this.beatStart) * PULSE_SPEED / 1000) % this.cycleDistance) * 1000 / PULSE_SPEED;
+    // Keep the pulses where they are: the beat is PULSE_SPEED units a second since beatStart. Where it is within the
+    // cycle stays, and so does which cycle it is, counted up to 12 (every turn count, 2 to 4, divides it), so a pipe
+    // whose sources take turns does not jump to its first colour.
+    if (this.cycleDistance) {
+      const beat = (now - this.beatStart) * PULSE_SPEED / 1000, cycles = Math.floor(beat / this.cycleDistance) % 12;
+      const kept = cycles * distance + (beat % this.cycleDistance) % distance;
+      this.beatStart = now - kept * 1000 / PULSE_SPEED;
+    }
     this.svg.style.setProperty("--ef-cycle-distance", distance);
     this.svg.style.setProperty("--ef-cycle-period", `${distance / PULSE_SPEED}s`);
     // Restarted, not just retimed: iOS Safari keeps a running animation's old duration and end value when the
@@ -1146,7 +1346,14 @@ export class EnergyFlowView {
     this.restartBeats();
   }
 
-  restartBeats() {
+  // The svg's own beat animations start again (see updatePulseCadence): once per update, however many asked, and
+  // not at all while the pulse layer draws the pulses (each restart restyles the whole picture).
+  restartBeats() { this.beatsDirty = true; }
+
+  flushBeats() {
+    if (!this.beatsDirty) return;
+    this.beatsDirty = false;
+    if (this.svg.classList.contains("ef-gl")) return;
     this.svg.classList.add("ef-restart");
     this.svg.getBoundingClientRect();
     this.svg.classList.remove("ef-restart");
@@ -1159,7 +1366,8 @@ export class EnergyFlowView {
     const now = document.timeline?.currentTime ?? performance.now();
     for (const a of this.svg.getAnimations({ subtree: true })) {
       if (!a.animationName?.endsWith("-beat")) continue;
-      const turns = a.animationName === "ef-grid-beat" ? this.gridTurns || 1 : 1;
+      // a flow taking turns (the grid pipe, the car's cable, a battery's pipe, a shared house line) has its own count
+      const turns = a.animationName === "ef-grid-beat" ? Number(a.effect?.target?.style.getPropertyValue("--ef-turns")) || 1 : 1;
       a.currentTime = (now - this.beatStart) % (turns * this.cycleDistance * 1000 / PULSE_SPEED);
     }
   }
@@ -1234,32 +1442,47 @@ export class EnergyFlowView {
   // shown, for the seasonal decorations; temperature (°C) brings heat shimmer or frost.
   update(state) {
     const cfg = this.cfg, color = this.colors;
-    const b1 = state.battery1 || {}, b2 = cfg.battery2.show ? state.battery2 || {} : {};
+    const b1 = cfg.battery1.show ? state.battery1 || {} : {}, b2 = cfg.battery2.show ? state.battery2 || {} : {};
     const solar = cfg.solar.show ? Math.max(0, flow(state.solar)) : 0;
     const b1w = flow(b1.power), b2w = flow(b2.power), grid = flow(state.grid);
     let home = state.home;
     // Home worked out from the others only when every part in the picture has a reading: with one sensor unavailable
-    // the sum would be wrong, so home shows a dash too.
-    const inputs = [state.grid, cfg.solar.show && state.solar, b1.power, cfg.battery2.show && b2.power]
-      .filter((v) => v !== false);
+    // the sum would be wrong, so home shows a dash too. The car is apart from home: what it takes (+) or gives (−)
+    // is set aside first, when there is a reading for it.
+    // A car with a sensor set up counts even when its reading is unavailable (then home is unknown too).
+    const carIn = cfg.ev?.entity || !missing(state.ev) ? (missing(state.ev) ? null : -state.ev) : false;
+    const inputs = [state.grid, cfg.solar.show && state.solar, cfg.battery1.show && b1.power, cfg.battery2.show && b2.power,
+      carIn].filter((v) => v !== false);
     if (missing(home) && inputs.every((v) => !missing(v))) {
       home = Math.max(0, inputs.reduce((sum, v) => sum + v, 0));
     }
     this.text("ef-solar", kw(missing(state.solar) ? null : Math.max(0, state.solar)), !solar);
     this.text("ef-home", kw(home), !flow(home));
     this.text("ef-grid", kw(state.grid), !grid);
-    // The garage opens for the car: with an EV sensor only while it charges, without one whenever it is set open.
-    // The EV label shows only with a reading.
-    const charging = !missing(state.ev) && !!flow(state.ev);
-    const open = cfg.garage === "open" && (missing(state.ev) || charging);
+    // The garage is on or off in the config: on, its shutter is up and the car shows, charging or not. The EV label
+    // shows whenever there is a power or charge reading for the car (0 kW still shows its charge), the garage shut
+    // too: then it points at the door.
+    const ev = missing(state.ev) ? 0 : flow(state.ev);
+    const open = state.garage ?? cfg.garage === "open";
+    this.svg.classList.toggle("ef-lights-off", state.lights === false);
     if (open !== this.svg.classList.contains("ef-garage-open") && !this.svg.classList.contains("ef-still")) {
       this.svg.classList.add("ef-garage-moving");  // drawn live while it moves (see .ef-baked)
       clearTimeout(this.garageMoving);
-      this.garageMoving = setTimeout(() => this.svg.classList.remove("ef-garage-moving"), GARAGE_MOVES);
+      this.garageMoving = setTimeout(() => {
+        this.svg.classList.remove("ef-garage-moving");
+        // the cable's pulses were held back while the shutter moved: the pulse layer looks again
+        for (const piece of this.pulses?.pieces || []) piece.key = null;
+        this.pulses?.update();
+        this.alignBeats();  // the svg's own pulses, where they draw them, start in step
+      }, GARAGE_MOVES);
     }
     this.svg.classList.toggle("ef-garage-open", open);
-    this.svg.classList.toggle("ef-ev-on", cfg.garage === "open" && charging);
-    this.text("ef-ev", kw(state.ev), false);
+    this.svg.classList.toggle("ef-ev-on", !(missing(state.ev) && missing(state.evSoc)));
+    this.text("ef-ev", kw(state.ev), !ev);
+    const evDir = this.part("ef-ev-dir"), evArrow = ev < 0 ? "▼" : "▲";  // as on the batteries: ▲ charges, ▼ gives out
+    if (evDir.textContent !== evArrow) evDir.textContent = evArrow;
+    this.attr(evDir, "fill-opacity", ev ? 1 : 0);  // kept in the line, so the charge doesn't jump sideways
+    this.text("ef-ev-soc", missing(state.evSoc) ? "" : `${Math.round(state.evSoc)}%`, null);
     this.battery("b1", b1.power, b1.soc);
     this.battery("b2", b2.power, b2.soc);
     this.extras(state.extras || []);
@@ -1267,44 +1490,97 @@ export class EnergyFlowView {
     // Who feeds what: the street takes solar first, then the batteries; a charging battery takes solar first, then
     // the grid, then the other battery; the house gets what is left. A charging battery or the street takes the
     // colour of what feeds it most.
-    const left = { solar, b1: Math.max(0, b1w), b2: Math.max(0, b2w), grid: Math.max(0, grid) };
-    const feed = (need, order) => {
-      let most = "grid", best = 0;
+    // The car is a source too while it gives power out (vehicle-to-home or -grid).
+    const evOn = !missing(state.ev) && ev !== 0;
+    const left = { solar, b1: Math.max(0, b1w), b2: Math.max(0, b2w), grid: Math.max(0, grid), ev: evOn ? Math.max(0, -ev) : 0 };
+    // Takes what `need` asks for from the sources in order: the colour of the one that gave most (`own`, the taker's
+    // colour, when none could: readings that do not add up), and every source that gave at least FLOW_MIN, in order.
+    const feed = (need, order, own) => {
+      let most = null, best = 0;
+      const from = [];
       for (const k of order) {
         const got = Math.min(need, left[k]);
         if (got <= 0) continue;
         left[k] -= got;
         need -= got;
         if (got > best) [most, best] = [k, got];
+        if (got >= FLOW_MIN) from.push(k);
       }
-      return color[most];
+      return { color: most ? color[most] : own, from };
     };
+    // The house is supplied first, as a home's own loads are: solar, then the batteries, the car, the grid. Batteries
+    // charging and the street then share what is left, so a picture whose readings do not quite add up still shows
+    // what feeds the house. With no home reading the house gets whatever is left over at the end, as before.
+    const house = { solar: 0, b1: 0, b2: 0, ev: 0, grid: 0 };
+    if (!missing(home)) {
+      let need = Math.max(0, home);
+      for (const k of ["solar", "b1", "b2", "ev", "grid"]) {
+        const got = Math.min(need, left[k]);
+        left[k] -= got;
+        need -= got;
+        house[k] = got;
+      }
+    }
     const before = { ...left };
-    const toGrid = feed(Math.max(0, -grid), ["solar", "b2", "b1"]);
-    // Every source that sends at least FLOW_MIN out to the street gets its own grid lane (the biggest always does).
-    const exporters = grid < 0 ? ["solar", "b1", "b2"].filter((k) => before[k] - left[k] >= FLOW_MIN) : [];
-    const toB1 = feed(Math.max(0, -b1w), ["solar", "grid", "b2"]);
-    const toB2 = feed(Math.max(0, -b2w), ["solar", "grid", "b1"]);
+    const toGrid = feed(Math.max(0, -grid), ["solar", "b2", "b1", "ev"], color.grid).color;
+    // Every source that sends at least FLOW_MIN out to the street gets its own grid lane (the biggest always does),
+    // up to the four the grid pipe can carry.
+    const exporters = grid < 0 ? ["solar", "b1", "b2", "ev"].filter((k) => before[k] - left[k] >= FLOW_MIN) : [];
+    const toB1 = feed(Math.max(0, -b1w), ["solar", "ev", "grid", "b2"], color.b1);
+    const toB2 = feed(Math.max(0, -b2w), ["solar", "ev", "grid", "b1"], color.b2);
+    // The car, apart from the house: charging, it takes solar first, then the batteries, then the grid; giving power
+    // out, its pulses are its own colour.
+    const toEv = evOn && ev > 0 ? feed(ev, ["solar", "b1", "b2", "grid"], color.ev) : null;
+    // Charging from several sources, their pulses take turns on the line, as on the grid pipe; giving power out, its
+    // own colour.
+    const mix = (fed) => (fed.from.length > 1 ? fed.from.map((k) => color[k]) : [fed.color]);
+    // The car is like a battery: "in" charges it. Its cable shows only with the shutter up (hidden while it moves);
+    // what it gives out still shows where it goes (the house, the street, a battery), the shutter down or not.
+    this.turnLanes(EV_FLOWS, evOn && open && (ev > 0 ? "in" : "out"), toEv ? mix(toEv) : [false]);
     this.pulse("solar", solar && "out");
-    this.line("b1", b1w > 0 ? "out" : b1w < 0 && "in", 0, b1w < 0 && toB1);
-    this.line("b2", b2w > 0 ? "out" : b2w < 0 && "in", 0, b2w < 0 && toB2);
+    const bWay = (w) => (w > 0 ? "out" : w < 0 && "in");
+    this.line("b1", bWay(b1w), 0, null, true, false);
+    this.line("b2", bWay(b2w), 0, null, true, false);
+    this.turnLanes(B1_FLOWS, bWay(b1w), b1w < 0 ? mix(toB1) : [false]);
+    this.turnLanes(B2_FLOWS, bWay(b2w), b2w < 0 ? mix(toB2) : [false]);
     if (grid < 0) this.gridLanes(exporters.length ? exporters.map((k) => ["out", color[k]]) : [["out", toGrid]]);
     else this.gridLanes([[grid > 0 && "in"]]);  // the grid's "in" is into the house
-    // From the meter box on to the house, top to bottom: solar, battery 1, battery 2, grid - one lane for each
-    // that feeds it. The batteries' lanes run straight through the box (battery 1 place 0, battery 2 place 1),
-    // solar, coming down from above, sits on top of them and the grid under the lowest.
+    // From the meter box on to the house, top to bottom: solar, battery 1, battery 2, grid, the car - one lane for
+    // each that feeds it, in places -1 (above battery 1's pipe) to 2 (the lowest the box's face covers). The
+    // batteries' lanes run straight through the box (battery 1 place 0, battery 2 place 1), the others stack on
+    // them. With nothing feeding the house its line still shows: the grid's lane, idle.
     const used = missing(home) || home >= FLOW_MIN;
-    const [hB1, hSolar, hB2, hGrid] = ["b1", "solar", "b2", "grid"].map((k) => used && left[k] >= FLOW_MIN);
-    this.line("h1", hB1 && "out", 0, color.b1);
-    this.line("h2", hSolar && "out", hB1 ? -1 : 0, color.solar);
-    this.line("h3", hB2 && "out", 1, color.b2);
-    this.line("h4", hGrid && "out", hB2 ? 2 : hB1 || hSolar ? 1 : 0, color.grid);
+    const feeds = (k) => used && (missing(home) ? left[k] : house[k]) >= FLOW_MIN;
+    const fed = Object.fromEntries(["solar", "b1", "b2", "grid", "ev"].map((k) => [k, feeds(k)]));
+    const count = Object.values(fed).filter(Boolean).length;
+    const { places, share } = housePlaces(fed, !b1w && !!b2w);
+    // Idle and one source feeding the house swap with no fade or slide, either way.
+    const swap = (this.houseCount === 0 && count === 1) || (this.houseCount === 1 && count === 0);
+    this.svg.classList.toggle("ef-swap", swap && !this.svg.classList.contains("ef-still"));
+    this.houseCount = count;
+    // Sharing: the batteries take turns on battery 1's line, battery 2's own rail hidden. Battery 2's line keeps that
+    // while it fades out, so its rail does not flash up over battery 1's.
+    if (share !== this.sharedHouse) {
+      this.sharedHouse = share;
+      this.turnStyle("h1", share ? 2 : 1, 0);
+      this.restartBeats();
+    }
+    if (fed.b2) {
+      this.turnStyle("h3", share ? 2 : 1, 1);
+      this.part("ef-l-h3").classList.toggle("ef-shared", share);
+    }
+    this.line("h1", fed.b1 && "out", places.b1, color.b1);
+    this.line("h2", fed.solar && "out", places.solar, color.solar);
+    this.line("h3", fed.b2 && "out", places.b2, color.b2);
+    this.line("h4", fed.grid && "out", places.grid, color.grid, count === 0);
+    this.line("h5", fed.ev && "out", places.ev, color.ev);
     this.updatePulseCadence();
+    this.flushBeats();
     this.alignBeats();
 
-    // Christmas decorations from 6 December to 6 January, unless switched off.
-    const day = new Date(state.time ?? Date.now()), md = (day.getMonth() + 1) * 100 + day.getDate();
-    this.svg.classList.toggle("ef-christmas", cfg.christmas !== false && (md >= 1206 || md <= 106));
+    // Festive decorations from 6 December to 6 January, unless switched off in the config (festive) or by a tap.
+    this.svg.classList.toggle("ef-christmas", cfg.festive !== false && christmasSeason(state.time));
+    this.svg.classList.toggle("ef-xmas-off", state.decorations === false);  // fades away (see the svg)
 
     const weather = WEATHERS.includes(state.weather) ? state.weather : "cloudy";
     this.attr(this.svg, "data-weather", PICTURE_WEATHER[weather]);
@@ -1319,6 +1595,11 @@ export class EnergyFlowView {
     const look = lookKey(this.svg);
     if (look !== this.watchedLook) { this.watchedLook = look; this.fine = 0; this.watchFrames(); }
 
+    this.alignLabels();  // the readings changed the labels' widths
+    if (this.svg.classList.contains("ef-swap")) {
+      this.svg.getBoundingClientRect();  // the house lines swapped with transitions off
+      this.svg.classList.remove("ef-swap");
+    }
     if (this.svg.classList.contains("ef-still")) {
       this.svg.getBoundingClientRect();  // lays the lanes out where they are before transitions are switched on
       this.svg.classList.remove("ef-still");
@@ -1437,7 +1718,12 @@ export class EnergyFlowView {
 
   // Labels stay readable on any sky: each one's background is sampled, and over a bright patch it gets a dark halo.
   adaptLabel(label, context, scale) {
-    const luminance = this.lightBehind(context, scale, label.getBBox());
+    // where the label ends up: solar's and the grid's slide left when there is room (see the svg)
+    const box = label.getBBox(), has = (c) => this.svg.classList.contains(c);
+    if (label.closest("#ef-solar-label") && !has("ef-ev-on")) box.x -= 99;
+    if (label.closest("#ef-grid-label") && has("ef-no-b1")) box.x -= 135;
+    box.x += label.shift || 0;  // centred on its leader (alignLabels)
+    const luminance = this.lightBehind(context, scale, box);
     if (luminance !== null) this.ink(label, luminance);
   }
 
