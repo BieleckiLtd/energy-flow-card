@@ -46,9 +46,10 @@ battery2:
   charge: sensor.battery2_charging     # two always-positive sensors work as well
   discharge: sensor.battery2_discharging
   soc: sensor.battery2_level
-# battery2: false                      # only one battery: its label and the grid's are then centred
-# garage: open                         # shutter rolled up: the car and its wall charger
-# ev: sensor.ev_charger_power          # with the garage open: it opens only while the car charges
+# battery2: false                      # only one battery (either can go): its label and the grid's are then centred
+# garage: on                           # shutter rolled up (or a cover entity): the car and its wall charger
+# lights: light.living_room             # house lights: on, off or an entity; tap the window to toggle
+# ev: sensor.ev_charger_power          # the car's power, + charging, − giving power out
 ```
 
 | Option | For | Meaning |
@@ -57,23 +58,30 @@ battery2:
 | `import` / `export` | grid | Two positive sensors instead of one signed one |
 | `power`, `soc` | battery1, battery2 | Signed power sensor and charge (%) |
 | `discharge` / `charge` | battery1, battery2 | Two positive sensors instead of one signed one |
-| `invert` | grid, batteries | Flip the sign if your sensor counts the other way |
+| `invert` | grid, batteries, ev, extras | Flip the sign if your sensor counts the other way |
 | `name` | any part | Label in the picture |
-| `color` | solar, grid, batteries | Flow colour, `#rrggbb` |
+| `color` | solar, grid, batteries, ev | Flow colour, `#rrggbb` |
 | `face` (or `glass`) | batteries | Colour of the glass cover, any `#rrggbb` |
-| `show` | solar, battery2 | Battery 1 is always there. Battery 2 is on by default; `show: false` (or `battery2: false`) takes it out, and battery 1's label and the grid's then centre on their leaders. Solar shows once it has a sensor |
+| `show` | solar, battery1, battery2 | The batteries are on by default; `show: false` (or `battery1: false`, `battery2: false`) takes one out, and the other's label and the grid's then centre on their leaders. Battery 2 shows only alongside battery 1. Without battery 1 the grid's label moves left into the room, and solar's does without an EV label. Solar shows once it has a sensor |
 | `weather` | card | A `weather.*` entity; without one the sky is clear |
 | `extras` | home | Loads within the home reading (pool, A/C...), each a power sensor or `{ name, entity, invert }`. Listed above the home label; a load under 0.05 kW folds away, and more than three scroll |
-| `garage` | card | `open` rolls the garage shutter up: a car parked nose in, plugged into an EV charger on the side wall; `closed` (the default) keeps it shut |
-| `ev` | card | The car's charging power sensor (or `{ entity, name }`). With `garage: open` the shutter rolls up and an EV label shows only while the car charges |
+| `garage` | card | `on` (or `open`, `1`) rolls the garage shutter up: a car parked nose in, plugged into an EV charger on the side wall; `off` (`0`, the default) keeps it shut. Or a `cover`, `switch` or `light` entity: the shutter follows it, and a tap on the shutter toggles it. Without an entity a tap opens or shuts it in the picture alone |
+| `lights` | card | The house lights: `on` (default) or `off` (the room behind the window goes dark), or a `light` or `switch` entity that a tap on the window toggles. |
+| `ev` | card | The car's power sensor (or `{ entity, soc, name, color, invert }`, `soc` its charge in %): + charging, − the car giving power out (vehicle-to-home or -grid). The EV label shows its power (0 kW when idle) and charge, ▲ charging and ▼ giving out, pointing at the garage door, or with the garage on at the car, with pulses on the charger's cable coloured by what feeds the car (`color` when it gives power out). Without a home sensor, home is worked out with the car's power set aside |
 | `temperature` | card | Optional outdoor temperature sensor; without one the weather entity's temperature is used |
 | `latitude`, `longitude` | card | Sky location, if not Home Assistant's own |
 | `title` | card | Optional heading |
-| `christmas` | card | Tree in the window and lights under the eaves from 6 December to 6 January; `false` turns them off (on by default) |
 | `effects` | card | Level of detail: `auto` (default), `high`, `medium` or `low`. With `auto`, where the animation stays choppy the card asks which level to use and keeps the answer on that device |
 | `look` | card | `glass`, `roof`, `wall`, `window`, `background` colours |
 
 Tap a label to open that sensor's details.
+
+## Older devices
+
+The pulses and the heat shimmer are drawn on the GPU, and the picture is detailed. On an old tablet or phone, set
+`effects: low` (or `medium`): the card then draws at a lower resolution and leaves the shimmer out, which takes much
+less memory. `auto` only steps down by itself once it has seen the animation run choppy for a while. If a dashboard
+reloads by itself on such a device, this is the setting to try first.
 
 ## Weather
 
