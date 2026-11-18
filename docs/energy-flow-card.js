@@ -325,7 +325,7 @@ class HeatShimmer {
   }
 
   running() {
-    return this.shown && !this.svg.classList.contains("ef-paused") && !matchMedia("(prefers-reduced-motion: reduce)").matches;
+    return this.shown && !this.svg.classList.contains("ef-paused") && !matchMedia(REDUCED_MOTION).matches;
   }
 
   // Lines the canvas up with the picture's drawing area inside the svg box.
@@ -864,6 +864,18 @@ const effectsLevel = (value) => OLD_EFFECTS[value] ?? (EFFECTS.includes(value) ?
 const EFFECTS_KEY = "energy-flow-card.effects";
 const WATCH_TIME = 60000;  // ms of moving picture per verdict
 const LOW_DENSITY = 1.5;
+const REDUCED_MOTION = "(prefers-reduced-motion: reduce)";
+
+// Where the system's Reduce Motion switch lives, for the hint shown while it keeps the pulses still.
+function motionSettingsPath(userAgent = "", platform = "", touchPoints = 0) {
+  if (/iPhone|iPad|iPod/.test(userAgent) || (platform === "MacIntel" && touchPoints > 1)) {
+    return "Settings → Accessibility → Motion → Reduce Motion";  // iPadOS reports itself as a Mac
+  }
+  if (/Android/.test(userAgent)) return "Settings → Accessibility → Remove animations";
+  if (/Mac/.test(platform) || /Macintosh/.test(userAgent)) return "System Settings → Accessibility → Display → Reduce motion";
+  if (/Win/.test(platform) || /Windows/.test(userAgent)) return "Settings → Accessibility → Visual effects → Animation effects";
+  return "";
+}
 function remembered() {
   try { return JSON.parse(localStorage.getItem(EFFECTS_KEY)) || {}; } catch { return {}; }
 }
@@ -921,7 +933,7 @@ class EnergyFlowView {
     this.trial = null;   // the level being tried out in the question
     this.fine = 0;
     this.watch = new FrameWatch((poor) => this.frameVerdict(poor));
-    this.onEffects = () => this.applyEffects();
+    this.onEffects = () => { this.applyEffects(); this.motionHint(); };
     addEventListener(EFFECTS_KEY, this.onEffects);
 
     const svg = this.svg;
@@ -956,21 +968,33 @@ class EnergyFlowView {
       this.observer = new IntersectionObserver(([entry]) => { this.seen = entry.isIntersecting; this.restWhenUnseen(); });
       this.observer.observe(svg);
     }
+
+    // The system's Reduce Motion stops the pulses; switched while the page is open, they follow.
+    this.motion = matchMedia(REDUCED_MOTION);
+    this.onMotion = () => {
+      this.restWhenUnseen();
+      if ("celsius" in this) this.temperature(this.celsius);
+      this.motionHint();
+    };
+    this.motion.addEventListener?.("change", this.onMotion);
+    this.motionHint();
   }
 
   destroy() {
     document.removeEventListener("visibilitychange", this.onVisibility);
     this.observer?.disconnect();
     removeEventListener(EFFECTS_KEY, this.onEffects);
+    this.motion.removeEventListener?.("change", this.onMotion);
     this.watch.stop();
     this.offer?.remove();
+    this.hint?.remove();
     this.shimmer?.destroy();
     this.pulses?.destroy();
   }
 
   // Whether anything in the picture may move now.
   pulsesRun() {
-    return !this.svg.classList.contains("ef-paused") && !matchMedia("(prefers-reduced-motion: reduce)").matches;
+    return !this.svg.classList.contains("ef-paused") && !matchMedia(REDUCED_MOTION).matches;
   }
 
   part(id) { return this.svg.getElementById(id); }
@@ -1111,6 +1135,41 @@ class EnergyFlowView {
     this.offer?.remove();
     this.offer = null;
     this.trial = null;
+  }
+
+  // While the system asks for reduced motion the pulses stand still, which looks broken unless it is said why.
+  // Shown until it is dismissed on this device (every card on the page follows) or Reduce Motion is switched off.
+  motionHint() {
+    const wanted = this.motion?.matches && !remembered().motionHintSeen;
+    if (!wanted) { this.hint?.remove(); this.hint = null; return; }
+    if (this.hint) return;
+    const hint = this.hint = document.createElement("div");
+    hint.style.cssText = "position:absolute;left:50%;bottom:10px;transform:translateX(-50%);z-index:2;"
+      + "width:max-content;max-width:calc(100% - 20px);box-sizing:border-box;padding:9px 10px 9px 14px;border-radius:14px;"
+      + "background:rgba(18,19,21,.92);color:#f1f1f1;font:13px/1.35 system-ui,-apple-system,sans-serif;"
+      + "text-align:left;box-shadow:0 3px 14px rgba(0,0,0,.45);display:flex;align-items:center;gap:12px";
+    hint.setAttribute("role", "note");
+    const text = document.createElement("div");
+    const path = motionSettingsPath(navigator.userAgent, navigator.platform, navigator.maxTouchPoints);
+    const where = document.createElement("b");
+    where.textContent = path || "your device's accessibility settings";
+    where.style.fontWeight = "600";
+    text.append("Energy pulses are paused because Reduce Motion is on. To see them move, turn it off in ", where, ".");
+    const ok = document.createElement("button");
+    ok.type = "button";
+    ok.textContent = "Got it";
+    ok.style.cssText = "flex:none;border:0;border-radius:12px;padding:5px 14px;font:inherit;font-weight:600;"
+      + "cursor:pointer;background:#f1f1f1;color:#111";
+    hint.append(text, ok);
+    // its own taps: not a tap on the picture
+    for (const type of ["click", "pointerdown", "pointerup", "mousedown", "mouseup", "touchstart", "touchend"]) {
+      hint.addEventListener(type, (e) => e.stopPropagation());
+    }
+    ok.addEventListener("click", () => remember({ motionHintSeen: true }));
+    const host = this.svg.parentNode;
+    // shown as the card is made, before it is on the page and has a computed position
+    if (!/^(relative|absolute|fixed|sticky)$/.test(getComputedStyle(host).position)) host.style.position = "relative";
+    host.append(hint);
   }
 
   // A battery's line: power, which way it flows (▼ out of the battery, ▲ into it) and its charge.
@@ -1358,7 +1417,7 @@ class EnergyFlowView {
     const frost = missing(celsius) ? 0 : Math.max(0, Math.min(1, (FROST_START - celsius) / (FROST_START - FROST_FULL)));
     this.svg.classList.toggle("ef-frosty", frost > 0);
     this.svg.style.setProperty("--ef-frost", frost.toFixed(2));
-    if (hot && LEVELS[this.level].shimmer && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    if (hot && LEVELS[this.level].shimmer && !matchMedia(REDUCED_MOTION).matches) {
       this.shimmer ??= new HeatShimmer(this.svg, this);
       this.shimmer.show(Math.min(8, 3 + (celsius - HOT) * .4));
     } else {
