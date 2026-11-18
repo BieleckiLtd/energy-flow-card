@@ -11,12 +11,13 @@ const HA_WEATHER = {
   lightning: "storm", "lightning-rainy": "storm", pouring: "heavy", rainy: "rain", snowy: "snow",
   "snowy-rainy": "rain", windy: "partly", "windy-variant": "cloudy", exceptional: "cloudy",
 };
-const PARTS = ["solar", "home", "grid", "battery1", "battery2"];
+const PARTS = ["solar", "home", "grid", "battery1", "battery2", "ev"];
 
 // The config as written (YAML or the editor) -> every option filled in. A part given as a plain string is its entity.
 export function normalizeConfig(config = {}) {
   const out = { title: config.title || "", weather: config.weather || "", temperature: config.temperature || "", latitude: config.latitude, longitude: config.longitude,
-    christmas: config.christmas !== false, effects: effectsLevel(config.effects) };
+    christmas: config.christmas !== false, effects: effectsLevel(config.effects),
+    garage: config.garage === "open" || config.garage === true ? "open" : "closed" };
   for (const key of PARTS) {
     let c = config[key];
     if (typeof c === "string") c = { entity: c };
@@ -33,6 +34,10 @@ export function normalizeConfig(config = {}) {
     }
     out[key] = part;
   }
+  // Home's other loads, listed above its label: each a sensor (a plain entity id is fine), with an optional name.
+  out.home.extras = (Array.isArray(out.home.extras) ? out.home.extras : [])
+    .map((e) => (typeof e === "string" ? { entity: e } : { ...(e || {}) }))
+    .filter((e) => e.entity || e.name);
   out.look = { ...DEFAULTS.look, ...(config.look || {}) };
   for (const k of Object.keys(out.look)) if (!validColor(out.look[k])) out.look[k] = DEFAULTS.look[k];
   return out;
@@ -52,7 +57,6 @@ export class EnergyFlowCard extends HTMLElement {
         .title { margin: 0; padding: 14px 16px 0; font: 500 16px/1.3 var(--paper-font-body1_-_font-family, system-ui, sans-serif); color: #f1f1f1; }
         /* Not an icon: back to SVG's own defaults, whatever the page around it inherits. */
         .picture svg { display: block; width: 100%; height: auto; fill: #000; stroke: none; stroke-width: 1; stroke-linecap: butt; stroke-linejoin: miter; letter-spacing: normal; }
-        .picture .ef-clickable { cursor: pointer; }
       </style>
       <div class="card" part="card"><h2 class="title" hidden></h2><div class="picture"></div></div>`;
     this.picture = this.shadowRoot.querySelector(".picture");
@@ -90,7 +94,7 @@ export class EnergyFlowCard extends HTMLElement {
     this.shadowRoot.host.style.setProperty("--efc-background", this.config.look.background);
     this.view.configure(this.config);
     for (const [id, part] of [["ef-solar-label", "solar"], ["ef-home-name", "home"], ["ef-home", "home"],
-      ["ef-grid-name", "grid"], ["ef-grid", "grid"], ["ef-b1-label", "battery1"], ["ef-b2-label", "battery2"]]) {
+      ["ef-grid-name", "grid"], ["ef-grid", "grid"], ["ef-ev-label", "ev"], ["ef-b1-label", "battery1"], ["ef-b2-label", "battery2"]]) {
       this.view.part(id).classList.toggle("ef-clickable", !!this.entityOf(part));
     }
     this.render();
@@ -122,9 +126,14 @@ export class EnergyFlowCard extends HTMLElement {
   }
 
   openMoreInfo(event) {
+    const extra = event.target.closest?.("[data-entity]")?.dataset.entity;
+    if (extra && this._hass) {
+      this.dispatchEvent(new CustomEvent("hass-more-info", { detail: { entityId: extra }, bubbles: true, composed: true }));
+      return;
+    }
     const target = event.target.closest("[id]");
     const map = { "ef-solar": "solar", "ef-solar-name": "solar", "ef-home": "home", "ef-home-name": "home",
-      "ef-grid": "grid", "ef-grid-name": "grid" };
+      "ef-grid": "grid", "ef-grid-name": "grid", "ef-ev": "ev", "ef-ev-name": "ev" };
     let part = map[target?.id];
     if (!part) part = event.target.closest("#ef-b1-label") ? "battery1" : event.target.closest("#ef-b2-label") ? "battery2" : "";
     const entityId = part && this.entityOf(part);
@@ -165,7 +174,10 @@ export class EnergyFlowCard extends HTMLElement {
     return {
       solar: solar === null ? null : Math.abs(solar),
       home: this.signed(cfg.home, "entity"),
+      extras: cfg.home.extras.map((e) => ({ name: e.name || hass.states[e.entity]?.attributes?.friendly_name || e.entity,
+        power: this.signed(e, "entity"), entity: e.entity })),
       grid: this.signed(cfg.grid, "entity", "import", "export"),
+      ev: this.signed(cfg.ev, "entity"),
       battery1: { power: this.signed(cfg.battery1, "power", "discharge", "charge"), soc: this.number(cfg.battery1.soc) },
       battery2: { power: this.signed(cfg.battery2, "power", "discharge", "charge"), soc: this.number(cfg.battery2.soc) },
       weather: HA_WEATHER[weatherState] || (cfg.weather ? "cloudy" : "clear"),
@@ -210,6 +222,8 @@ export class EnergyFlowCard extends HTMLElement {
         { name: "weather", selector: { entity: { domain: "weather" } } },
         { name: "temperature", selector: { entity: { domain: "sensor", device_class: "temperature" } } },
         { name: "christmas", selector: { boolean: {} } },
+        { name: "garage", selector: { select: { mode: "dropdown", options: [
+          { value: "closed", label: "Closed" }, { value: "open", label: "Open: the car plugged into a wall charger" }] } } },
         { name: "effects", selector: { select: { mode: "dropdown", options: [
           { value: "auto", label: "Auto: asks on devices that struggle" }, { value: "high", label: "High" },
           { value: "medium", label: "Medium" }, { value: "low", label: "Low" }] } } },
@@ -220,6 +234,11 @@ export class EnergyFlowCard extends HTMLElement {
           { name: "entity", selector: power }, { name: "import", selector: power }, { name: "export", selector: power },
           { name: "invert", selector: { boolean: {} } }, { name: "name", selector: text }, color("color")] },
         { type: "expandable", name: "home", title: "Home", schema: [
+          { name: "entity", selector: power }, { name: "name", selector: text },
+          { name: "extras", selector: { object: { multiple: true, label_field: "name", description_field: "entity", fields: {
+            name: { label: "Name", selector: text }, entity: { label: "Power sensor", required: true, selector: power },
+            invert: { label: "Flip the sign", selector: { boolean: {} } } } } } }] },
+        { type: "expandable", name: "ev", title: "EV charger (shown with the garage open)", schema: [
           { name: "entity", selector: power }, { name: "name", selector: text }] },
         ...[1, 2].map((n) => ({ type: "expandable", name: `battery${n}`, title: `Battery ${n}`, schema: [
           ...(n === 2 ? [{ name: "show", selector: { boolean: {} } }] : []), { name: "power", selector: power }, { name: "soc", selector: power },
@@ -256,15 +275,16 @@ export class EnergyFlowCard extends HTMLElement {
 }
 
 const LABELS = {
-  title: "Title", weather: "Weather entity", temperature: "Outdoor temperature sensor (optional)", christmas: "Christmas decorations (6 December to 6 January)", effects: "Detail", entity: "Power sensor", import: "Import sensor (instead of one signed sensor)",
+  title: "Title", weather: "Weather entity", temperature: "Outdoor temperature sensor (optional)", christmas: "Christmas decorations (6 December to 6 January)", garage: "Garage door", effects: "Detail", entity: "Power sensor", import: "Import sensor (instead of one signed sensor)",
   export: "Export sensor", invert: "Flip the sign", name: "Name", color: "Flow colour (#rrggbb)", show: "Show in picture",
   power: "Power sensor", soc: "Charge (%) sensor", discharge: "Discharge sensor (instead of one signed sensor)",
   charge: "Charge sensor", face: "Glass cover colour (#rrggbb, any colour)", glass: "Solar glass", roof: "Roof", wall: "Wall",
-  window: "Window", background: "Background",
+  window: "Window", background: "Background", extras: "Other loads (listed above home)",
 };
 const HELPERS = {
   temperature: "Above 30 °C the air shimmers; below 3 °C frost grows, fully at -10 °C. Without a sensor the weather entity's temperature is used.",
   effects: "Auto asks on a device where the animation is choppy, and keeps the answer there.",
+  extras: "Pool, A/C, dishwasher... each with its own power sensor. Shown above the home reading; more than three scroll.",
   invert: "Grid: + is import. Batteries: + is discharging. Turn on if your sensor uses the other sign.",
 };
 

@@ -26,14 +26,17 @@
     grid: { name: "Grid", color: "#cfd3d6" },
     battery1: { name: "Battery 1", color: "#4dbd80", face: "#eeeeee" },
     battery2: { show: true, name: "Battery 2", color: "#4aa5f2", face: "#4b4e54" },
+    garage: "closed",
   };
+  // Home's other loads in Try it, as shares of the home reading: they are part of it, so never add up to more.
+  const EXTRAS = [["Pool", 0.35], ["A/C", 0.5]];
   const clone = (o) => JSON.parse(JSON.stringify(o));
   const today = () => new Date().toISOString().slice(0, 10);
 
   const state = {
     place: "london", latitude: 51.5072, longitude: -0.1276, zone: "Europe/London",
     date: today(), minute: 720, weather: "clear", temperature: 15, effects: "auto",
-    power: { solar: 2.2, b1: 0, b2: 0, grid: 0, home: 2.2, b1soc: 64, b2soc: 48 }, balance: true,
+    power: { solar: 2.2, b1: 0, b2: 0, grid: 0, home: 2.2, b1soc: 64, b2soc: 48, ev: 7.4 }, balance: true,
     config: clone(DEFAULT_CONFIG),
   };
   try {
@@ -41,7 +44,10 @@
     if (saved) {
       for (const k of ["place", "latitude", "longitude", "zone", "weather", "temperature", "balance", "effects"]) if (k in saved) state[k] = saved[k];
       Object.assign(state.power, saved.power || {});
-      for (const part of Object.keys(DEFAULT_CONFIG)) Object.assign(state.config[part], saved.config?.[part] || {});
+      for (const part of Object.keys(DEFAULT_CONFIG)) {
+        if (typeof DEFAULT_CONFIG[part] === "string") { if (typeof saved.config?.[part] === "string") state.config[part] = saved.config[part]; }
+        else Object.assign(state.config[part], saved.config?.[part] || {});
+      }
       delete state.config.battery1.show;  // battery 1 is always there (older saves could switch it off)
     }
   } catch { /* a private window: start fresh */ }
@@ -130,6 +136,9 @@
       solar: w(p.solar), home: w(p.home), grid: w(p.grid),
       battery1: { power: w(p.b1), soc: p.b1soc }, battery2: { power: w(p.b2), soc: p.b2soc },
       weather: state.weather, temperature: state.temperature, sky, time: instant,
+      ev: w(p.ev),
+      extras: (show.config ? SHOWCASE[show.index].extras || [] : EXTRAS)
+        .map(([name, share]) => ({ name, power: w(Math.round(p.home * share * 10) / 10) })),
     });
     for (const b of $("weather").children) b.setAttribute("aria-pressed", b.dataset.key === state.weather);
     for (const b of $("effects").children) b.setAttribute("aria-pressed", b.dataset.key === state.effects);
@@ -231,7 +240,8 @@
     {
       title: "Out of the box", note: "summer afternoon, solar charging both batteries and exporting",
       config: DEFAULT_CONFIG, date: "2026-06-21", clock: [14, 0], weather: "clear", temperature: 24,
-      power: { solar: 5.8, b1: -2.4, b2: -1.0, grid: -1.7, home: 0.7, b1soc: 72, b2soc: 85 },
+      power: { solar: 5.8, b1: -2.4, b2: -1.0, grid: -0.2, home: 2.2, b1soc: 72, b2soc: 85 },
+      extras: EXTRAS,  // pool 0.8 and A/C 1.1 of home's 2.2 kW
     },
     {
       title: "Your colours", note: "a December evening in the snow under a waxing crescent, decorations up",
@@ -245,14 +255,15 @@
       power: { solar: 0, b1: 1.6, b2: 0.6, grid: 0.4, home: 2.6, b1soc: 58, b2soc: 41 },
     },
     {
-      title: "Just one battery", note: "a rainy night, cheap-rate grid power filling it up",
+      title: "Just one battery", note: "a rainy night, garage open, cheap-rate grid power filling it up",
       config: {
         ...DEFAULT_CONFIG,
         battery1: { name: "Battery 1", color: "#4f9fe0", face: "#d9dde2" },
         battery2: { ...DEFAULT_CONFIG.battery2, show: false },
+        garage: "open",
       },
       date: "2026-10-24", clock: [2, 30], weather: "rain", temperature: 9,
-      power: { solar: 0, b1: -3.0, b2: 0, grid: 3.4, home: 0.4, b1soc: 34, b2soc: 0 },
+      power: { solar: 0, b1: -3.0, b2: 0, grid: 3.4, home: 0.4, b1soc: 34, b2soc: 0, ev: 3.7 },
     },
   ];
   const SHOW_FOR = 9000;  // ms per scene
@@ -387,6 +398,8 @@
     }
     box.append(slider("grid", c.grid.name, -8, 8, 0.1, c.grid.color));
     box.append(slider("home", c.home.name, 0, 12, 0.1, ""));
+    // The car on the garage wall box: at 0 the garage closes.
+    if (c.garage === "open") box.append(slider("ev", "EV", 0, 11, 0.1, ""));
     const check = document.createElement("label");
     check.className = "check";
     check.innerHTML = `<input type="checkbox"> ${escapeHtml(c.home.name)} uses what the others give`;
@@ -461,12 +474,23 @@
       if (!colors.length) sw.remove();
       box.append(el);
     }
+    // The garage has no label or colours: only its door, shut or rolled up to show the car and EV charger.
+    const garage = document.createElement("div");
+    garage.className = "part";
+    garage.innerHTML = `<div class="part-head"><span>Garage open: car and EV charger</span><label class="switch"><input type="checkbox" role="switch" aria-label="Open the garage"><span></span></label></div>`;
+    const open = garage.querySelector("input");
+    open.checked = state.config.garage === "open";
+    open.addEventListener("change", () => {
+      state.config.garage = open.checked ? "open" : "closed";
+      applyConfig();
+    });
+    box.append(garage);
     const reset = document.createElement("button");
     reset.type = "button";
     reset.className = "button ghost";
     reset.textContent = "Reset parts";
     reset.onclick = () => {
-      for (const k of ["solar", "home", "grid", "battery1", "battery2"]) state.config[k] = clone(DEFAULT_CONFIG[k]);
+      for (const k of Object.keys(DEFAULT_CONFIG)) state.config[k] = clone(DEFAULT_CONFIG[k]);
       buildParts();
       applyConfig();
     };
@@ -493,10 +517,12 @@
     if (c.solar.show) block("solar", [["entity", "sensor.solar_power"]]);
     block("grid", [["entity", "sensor.grid_power"]]);
     block("home", [["entity", "sensor.home_power"]]);
+    lines.push("  extras:", ...EXTRAS.map(([name]) => `    - { name: ${q(name)}, entity: sensor.${name.toLowerCase().replace(/\W+/g, "_")}_power }`));
     block("battery1", [["power", "sensor.battery_1_power"], ["soc", "sensor.battery_1_charge"]]);
     // Battery 2 is on by default, so switched off it is written out.
     if (c.battery2.show) block("battery2", [["power", "sensor.battery_2_power"], ["soc", "sensor.battery_2_charge"]]);
     else lines.push("battery2: false");
+    if (c.garage === "open") lines.push("garage: open", "ev: sensor.ev_charger_power");
     return lines.join("\n") + "\n";
   }
   $("copy").addEventListener("click", async () => {

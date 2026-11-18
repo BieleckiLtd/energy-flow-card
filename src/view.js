@@ -11,6 +11,10 @@ const GRID_FLOWS = ["grid", "grid2", "grid3"];
 const HOT = 30;  // °C: above this the air shimmers
 const FROST_START = 3;  // °C: frost begins to form here...
 const FROST_FULL = -10;  // ...and is fully grown here
+const GARAGE_MOVES = 1800;  // ms the shutter takes to roll up or down, with its delay
+const EXTRA_ROW = 38;  // picture units between the rows of home's other loads (the list's line-height)
+const EXTRA_ROWS = 3.5;  // rows in sight at most: the half row shows the list goes on
+const EXTRA_BOTTOM = 252;  // where the list ends, just above the home label
 
 // The weather the picture can draw, and how much of the sky (sun, moon, twilight) shows through each.
 export const WEATHERS = ["clear", "partly", "cloudy", "fog", "drizzle", "rain", "heavy", "snow", "storm"];
@@ -21,6 +25,7 @@ const SKY_VISIBILITY = { clear: 1, partly: .62, cloudy: .12, snow: .5 };
 export const DEFAULTS = {
   solar: { show: true, name: "Solar", color: "#d6a62c" },
   home: { name: "Home" },
+  ev: { name: "EV" },
   grid: { name: "Grid", color: "#cfd3d6" },
   battery1: { name: "Battery 1", color: "#4dbd80", face: "#eeeeee" },
   battery2: { show: true, name: "Battery 2", color: "#4aa5f2", face: "#4b4e54" },
@@ -118,7 +123,7 @@ const SHIMMER_FADE = 600;  // ms to cross-fade a new snapshot in
 // background is sampled again only when the look changes (weather, night, decorations, colours) or after this long
 // (ms): the sun, the light and the clouds move slowly enough.
 const RESAMPLE = 60000;
-const TRANSIENT = new Set(["ef-paused", "ef-baked", "ef-still", "ef-restart"]);
+const TRANSIENT = new Set(["ef-paused", "ef-baked", "ef-still", "ef-restart", "ef-garage-moving"]);
 const lookKey = (svg) => [...svg.classList].filter((c) => !TRANSIENT.has(c)).join(" ")
   + "|" + svg.getAttribute("data-weather") + "|" + svg.getAttribute("data-time");
 
@@ -877,6 +882,7 @@ export class EnergyFlowView {
   }
 
   destroy() {
+    clearTimeout(this.garageMoving);
     document.removeEventListener("visibilitychange", this.onVisibility);
     this.observer?.disconnect();
     removeEventListener(EFFECTS_KEY, this.onEffects);
@@ -915,6 +921,7 @@ export class EnergyFlowView {
     const name = (id, value) => this.text(id, String(value ?? "").toUpperCase(), null);
     name("ef-solar-name", cfg.solar.name);
     name("ef-home-name", cfg.home.name);
+    name("ef-ev-name", cfg.ev.name);
     name("ef-grid-name", cfg.grid.name);
     name("ef-b1-name", cfg.battery1.name);
     name("ef-b2-name", cfg.battery2.name);
@@ -1241,8 +1248,21 @@ export class EnergyFlowView {
     this.text("ef-solar", kw(missing(state.solar) ? null : Math.max(0, state.solar)), !solar);
     this.text("ef-home", kw(home), !flow(home));
     this.text("ef-grid", kw(state.grid), !grid);
+    // The garage opens for the car: with an EV sensor only while it charges, without one whenever it is set open.
+    // The EV label shows only with a reading.
+    const charging = !missing(state.ev) && !!flow(state.ev);
+    const open = cfg.garage === "open" && (missing(state.ev) || charging);
+    if (open !== this.svg.classList.contains("ef-garage-open") && !this.svg.classList.contains("ef-still")) {
+      this.svg.classList.add("ef-garage-moving");  // drawn live while it moves (see .ef-baked)
+      clearTimeout(this.garageMoving);
+      this.garageMoving = setTimeout(() => this.svg.classList.remove("ef-garage-moving"), GARAGE_MOVES);
+    }
+    this.svg.classList.toggle("ef-garage-open", open);
+    this.svg.classList.toggle("ef-ev-on", cfg.garage === "open" && charging);
+    this.text("ef-ev", kw(state.ev), false);
     this.battery("b1", b1.power, b1.soc);
     this.battery("b2", b2.power, b2.soc);
+    this.extras(state.extras || []);
 
     // Who feeds what: the street takes solar first, then the batteries; a charging battery takes solar first, then
     // the grid, then the other battery; the house gets what is left. A charging battery or the street takes the
@@ -1306,6 +1326,86 @@ export class EnergyFlowView {
     this.scheduleLabelContrast();
   }
 
+  // Home's other loads (pool, A/C...), listed above its label: [{ name, power (W), entity }]. A load drawing less than
+  // FLOW_MIN folds away and unfolds again when it starts (an unavailable one stays, with a dash). More than EXTRA_ROWS
+  // scroll; scrolling past either end goes on to the page. The edge with more rows beyond it fades out.
+  extras(list) {
+    const box = this.part("ef-extras"), rows = box.firstElementChild;
+    const key = JSON.stringify(list.map((e) => [e.name, e.entity || ""]));
+    const fresh = key !== this.extrasKey;
+    if (fresh) {
+      this.extrasKey = key;
+      rows.replaceChildren(...list.map((e) => {
+        const row = document.createElement("div"), name = document.createElement("span"), value = document.createElement("span");
+        row.className = "ef-extra";
+        if (e.entity) row.dataset.entity = e.entity;
+        name.className = "ef-extra-name";
+        name.textContent = String(e.name ?? "").toUpperCase();
+        name.title = String(e.name ?? "");
+        value.className = "ef-extra-val";
+        row.append(name, value);
+        return row;
+      }));
+      const height = Math.min(list.length, EXTRA_ROWS) * EXTRA_ROW;
+      this.attr(box, "y", EXTRA_BOTTOM - height);
+      this.attr(box, "height", height);
+      if (list.length) box.removeAttribute("display");
+      else box.setAttribute("display", "none");
+      if (!this.extrasScroll) {
+        this.extrasScroll = () => this.fadeExtras();
+        rows.addEventListener("scroll", this.extrasScroll, { passive: true });
+        rows.addEventListener("transitionend", this.extrasScroll);
+      }
+    }
+    list.forEach((e, i) => {
+      const value = rows.children[i].lastElementChild, text = kw(e.power);
+      if (value.textContent !== text) value.textContent = text;
+      rows.children[i].classList.toggle("ef-extra-off", !missing(e.power) && !flow(e.power));
+    });
+    // New rows start folded or not, with no animation: nothing above reads the layout before this.
+    if (fresh) rows.scrollTop = 0;
+    this.fadeExtras();
+  }
+
+  // The list is one label: judged against the background behind all its visible text (each row where it sits now,
+  // weighted by its size), so every row gets the same ink, and a sun behind one row alone is not enough for a halo.
+  inkExtras() {
+    const backdrop = this.extrasBackdrop, rows = this.part("ef-extras").firstElementChild;
+    const picture = this.svg.getBoundingClientRect();
+    if (!backdrop || !picture.width) return;
+    const units = this.svg.viewBox.baseVal.width / picture.width, list = rows.getBoundingClientRect();
+    const range = document.createRange();
+    let light = 0, area = 0;
+    for (const row of rows.children) {
+      range.selectNodeContents(row);
+      const text = range.getBoundingClientRect();
+      const top = Math.max(text.top, list.top), bottom = Math.min(text.bottom, list.bottom);
+      if (bottom - top < 1 || !text.width) continue;
+      const luminance = this.lightBehind(backdrop.context, backdrop.scale, { x: (text.left - picture.left) * units,
+        y: (top - picture.top) * units, width: text.width * units, height: (bottom - top) * units });
+      if (luminance === null) continue;
+      light += luminance * text.width * (bottom - top);
+      area += text.width * (bottom - top);
+    }
+    if (!area) return;
+    // ink() keeps its hysteresis in the classes of the element it is given: one off the page for the list, copied to
+    // every row (the list's own box would get the labels' drop shadow as well).
+    const ink = this.extrasInk ??= document.createElement("span");
+    this.ink(ink, light / area);
+    for (const row of rows.children) {
+      row.classList.toggle("ef-ink-lifted", ink.classList.contains("ef-ink-lifted"));
+      row.classList.toggle("ef-ink-bright", ink.classList.contains("ef-ink-bright"));
+    }
+  }
+
+  fadeExtras() {
+    this.inkExtras();
+    const rows = this.part("ef-extras").firstElementChild;
+    const below = rows.scrollHeight - rows.clientHeight - rows.scrollTop > 1, above = rows.scrollTop > 1;
+    rows.style.setProperty("--ef-fade-top", above ? `${EXTRA_ROW * .6}px` : "0px");
+    rows.style.setProperty("--ef-fade-bottom", below ? `${EXTRA_ROW * .6}px` : "0px");
+  }
+
   // Air temperature in °C, or nothing. The shimmer grows a little stronger with the heat.
   temperature(celsius) {
     this.celsius = celsius;
@@ -1337,17 +1437,26 @@ export class EnergyFlowView {
 
   // Labels stay readable on any sky: each one's background is sampled, and over a bright patch it gets a dark halo.
   adaptLabel(label, context, scale) {
-    const { x, y, width, height } = label.getBBox();
+    const luminance = this.lightBehind(context, scale, label.getBBox());
+    if (luminance !== null) this.ink(label, luminance);
+  }
+
+  // The mean luminance of the sampled background under a box in the picture's units, or null outside it.
+  lightBehind(context, scale, { x, y, width, height }) {
     const left = Math.max(0, Math.floor(x * scale)), top = Math.max(0, Math.floor(y * scale));
     const right = Math.min(context.canvas.width, Math.ceil((x + width) * scale));
     const bottom = Math.min(context.canvas.height, Math.ceil((y + height) * scale));
-    if (right <= left || bottom <= top) return;
+    if (right <= left || bottom <= top) return null;
     const pixels = context.getImageData(left, top, right - left, bottom - top).data;
     let light = 0;
     for (let i = 0; i < pixels.length; i += 4) {
       light += .2126 * linearLight(pixels[i]) + .7152 * linearLight(pixels[i + 1]) + .0722 * linearLight(pixels[i + 2]);
     }
-    const luminance = light * 4 / pixels.length;
+    return light * 4 / pixels.length;
+  }
+
+  // White ink over a dark background, brighter over a lighter one, and a dark halo over a bright one.
+  ink(label, luminance) {
     const threshold = label.classList.contains("ef-ink-lifted") ? .165 : .18;
     const lifted = luminance > threshold;
     label.classList.toggle("ef-ink-lifted", lifted);
@@ -1382,6 +1491,10 @@ export class EnergyFlowView {
       for (const label of this.part("ef-labels").querySelectorAll("text")) {
         if (label.getClientRects().length) this.adaptLabel(label, context, scale);
       }
+      // Home's other loads move (they scroll and fold), so the background behind them is kept and each row is judged
+      // where it is now.
+      this.extrasBackdrop = this.part("ef-extras").getClientRects().length ? { context, scale } : null;
+      this.inkExtras();
       this.contrastKey = key;
       this.contrastAt = performance.now();
     } finally {

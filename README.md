@@ -33,6 +33,9 @@ grid:
   entity: sensor.grid_power            # + import, − export
 home:
   entity: sensor.home_power            # optional: worked out from the others when left out
+  extras:                              # optional: loads within home, listed above it
+    - { name: Pool, entity: sensor.pool_power }
+    - sensor.ac_power                  # name taken from the sensor
 battery1:
   power: sensor.battery_power          # + discharging, − charging
   soc: sensor.battery_level
@@ -44,6 +47,8 @@ battery2:
   discharge: sensor.battery2_discharging
   soc: sensor.battery2_level
 # battery2: false                      # only one battery: its label and the grid's are then centred
+# garage: open                         # shutter rolled up: the car and its wall charger
+# ev: sensor.ev_charger_power          # with the garage open: it opens only while the car charges
 ```
 
 | Option | For | Meaning |
@@ -58,6 +63,9 @@ battery2:
 | `face` (or `glass`) | batteries | Colour of the glass cover, any `#rrggbb` |
 | `show` | solar, battery2 | Battery 1 is always there. Battery 2 is on by default; `show: false` (or `battery2: false`) takes it out, and battery 1's label and the grid's then centre on their leaders. Solar shows once it has a sensor |
 | `weather` | card | A `weather.*` entity; without one the sky is clear |
+| `extras` | home | Loads within the home reading (pool, A/C...), each a power sensor or `{ name, entity, invert }`. Listed above the home label; a load under 0.05 kW folds away, and more than three scroll |
+| `garage` | card | `open` rolls the garage shutter up: a car parked nose in, plugged into an EV charger on the side wall; `closed` (the default) keeps it shut |
+| `ev` | card | The car's charging power sensor (or `{ entity, name }`). With `garage: open` the shutter rolls up and an EV label shows only while the car charges |
 | `temperature` | card | Optional outdoor temperature sensor; without one the weather entity's temperature is used |
 | `latitude`, `longitude` | card | Sky location, if not Home Assistant's own |
 | `title` | card | Optional heading |
