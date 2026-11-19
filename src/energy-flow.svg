@@ -298,22 +298,16 @@
 .ef-light #ef-garage-slat stop:nth-child(1){stop-color:#d8dadd}
 .ef-light #ef-garage-slat stop:nth-child(2){stop-color:#c4c6c9}
 .ef-light #ef-garage-slat stop:nth-child(3){stop-color:#a9abaf}
-/* Labels: dark ink; over a dark patch (the panels) a white glow behind it, and white ink only at night */
+/* Labels: dark ink, day and night; over a dark patch (the panels, the night sky) a white glow behind it */
 .ef-light .ef-cap{fill:#45484d}
 .ef-light .ef-val{fill:#1b1c1e}
 .ef-light .ef-idle{fill:#6f7277}
 .ef-light .ef-ink-bright.ef-cap{fill:#2e3034}
 .ef-light .ef-ink-bright.ef-val,.ef-light .ef-ink-bright .ef-idle{fill:#111214}
 .ef-light #ef-labels .ef-ink-bright{filter:drop-shadow(0 0 3px rgb(255 255 255/.9)) drop-shadow(0 0 12px rgb(255 255 255/.75))}
-.ef-light[data-time=night] .ef-ink-bright.ef-cap{fill:#c9ccd1}
-.ef-light[data-time=night] .ef-ink-bright.ef-val,.ef-light[data-time=night] .ef-ink-bright .ef-idle{fill:#f4f4f4}
-.ef-light[data-time=night] #ef-labels .ef-ink-bright{filter:none}
 .ef-light .ef-extra-name{color:#55595f}
 .ef-light .ef-extra-val{color:#1b1c1e}
 .ef-light .ef-extra.ef-ink-bright span{text-shadow:0 0 3px rgb(255 255 255/.9),0 0 9px rgb(255 255 255/.6)}
-.ef-light[data-time=night] .ef-extra.ef-ink-bright .ef-extra-name{color:#c9ccd1}
-.ef-light[data-time=night] .ef-extra.ef-ink-bright .ef-extra-val{color:#f4f4f4}
-.ef-light[data-time=night] .ef-extra.ef-ink-bright span{text-shadow:none}
 .ef-light .ef-extra.ef-extra-edge .ef-extra-name{color:rgb(85 89 95/.3)}
 .ef-light .ef-extra.ef-extra-edge .ef-extra-val{color:rgb(27 28 30/.3)}
 .ef-light .ef-lead{stroke:#3a3d42;stroke-opacity:.5}
@@ -325,9 +319,27 @@
 .ef-light #ef-rain{stroke:#4f5964}
 .ef-light #ef-snow{stroke:#8d97a2;stroke-width:.8;stroke-opacity:.55}
 .ef-light .ef-reflection{opacity:.16}
-/* After dark the light walls dim with the sky (where color-mix works; elsewhere they stay as by day). */
+/* At night (light mode): a deep blue sky over lavender ground, the walls still light in a cool moonlit tint, the
+   roof blue-grey (where color-mix works; elsewhere they stay as by day). */
+.ef-light #ef-night-g stop:nth-child(1){stop-color:#0f2457;stop-opacity:.95}
+.ef-light #ef-night-g stop:nth-child(2){stop-color:#3550a0;stop-opacity:.62}
+.ef-light #ef-night-g stop:nth-child(3){stop-color:#9aaad6}
+.ef-light[data-time=night] .ef-lead{stroke:#fff;stroke-opacity:.75}
 @supports (color:color-mix(in srgb,red,blue 10%)){
-.ef-light{--ef-dusk:calc(var(--ef-darkness,0) * 45%);--ef-wall-1:color-mix(in srgb,#f4f4f3,#2a2e35 var(--ef-dusk));--ef-wall-2:color-mix(in srgb,#eeeeed,#2a2e35 var(--ef-dusk));--ef-gable-1:color-mix(in srgb,#e2e4e7,#2a2e35 var(--ef-dusk));--ef-gable-2:color-mix(in srgb,#d9dbdf,#2a2e35 var(--ef-dusk));--ef-garage-wall:color-mix(in srgb,#e4e6e9,#2a2e35 var(--ef-dusk));--ef-jamb:color-mix(in srgb,#c9cbcf,#2a2e35 var(--ef-dusk));--ef-door:color-mix(in srgb,#eceef0,#2a2e35 var(--ef-dusk));--ef-door-line:color-mix(in srgb,#cdd0d4,#2a2e35 var(--ef-dusk))}}
+.ef-light{--ef-moonlit:calc(var(--ef-darkness,0) * 26%);--ef-moonroof:calc(var(--ef-darkness,0) * 45%);--ef-moonsky:calc(var(--ef-darkness,0) * 62%);
+  --ef-wall-1:color-mix(in srgb,#f4f4f3,#8e9cc4 var(--ef-moonlit));--ef-wall-2:color-mix(in srgb,#eeeeed,#8e9cc4 var(--ef-moonlit));--ef-gable-1:color-mix(in srgb,#e2e4e7,#8e9cc4 var(--ef-moonlit));--ef-gable-2:color-mix(in srgb,#d9dbdf,#8e9cc4 var(--ef-moonlit));--ef-garage-wall:color-mix(in srgb,#e4e6e9,#8e9cc4 var(--ef-moonlit));--ef-jamb:color-mix(in srgb,#c9cbcf,#8e9cc4 var(--ef-moonlit));--ef-door:color-mix(in srgb,#eceef0,#8e9cc4 var(--ef-moonlit));--ef-door-line:color-mix(in srgb,#cdd0d4,#8e9cc4 var(--ef-moonlit));
+  --ef-roof-1:color-mix(in srgb,#8f9297,#3c4a78 var(--ef-moonroof));--ef-roof-2:color-mix(in srgb,#85888d,#3c4a78 var(--ef-moonroof));--ef-roof-3:color-mix(in srgb,#7f8287,#3c4a78 var(--ef-moonroof));--ef-roof-back-1:color-mix(in srgb,#94979c,#3c4a78 var(--ef-moonroof));--ef-roof-back-2:color-mix(in srgb,#8a8d92,#3c4a78 var(--ef-moonroof));--ef-roof-edge:color-mix(in srgb,#a4a7ab,#3c4a78 var(--ef-moonroof));--ef-roof-line:color-mix(in srgb,#7c7f84,#3c4a78 var(--ef-moonroof));--ef-fascia:color-mix(in srgb,#a8abaf,#3c4a78 var(--ef-moonroof));--ef-roof-ridge:color-mix(in srgb,#b8bbbf,#3c4a78 var(--ef-moonroof))}
+.ef-light #ef-sky stop:nth-child(1){stop-color:color-mix(in srgb,#c9d0d8,#b4bfe0 var(--ef-moonsky))}
+.ef-light #ef-sky stop:nth-child(2){stop-color:color-mix(in srgb,#d1d7de,#b4bfe0 var(--ef-moonsky))}
+.ef-light #ef-sky stop:nth-child(3){stop-color:color-mix(in srgb,#d8dde3,#b4bfe0 var(--ef-moonsky))}
+.ef-light #ef-sky stop:nth-child(4){stop-color:color-mix(in srgb,#dde1e6,#b4bfe0 var(--ef-moonsky))}
+.ef-light #ef-sky stop:nth-child(5){stop-color:color-mix(in srgb,#e3e6ea,#b4bfe0 var(--ef-moonsky))}
+.ef-light #ef-sky stop:nth-child(6){stop-color:color-mix(in srgb,#e8eaed,#b4bfe0 var(--ef-moonsky))}
+.ef-light #ef-sky stop:nth-child(7){stop-color:color-mix(in srgb,#ebedf0,#b4bfe0 var(--ef-moonsky))}
+.ef-light #ef-sky stop:nth-child(8){stop-color:color-mix(in srgb,#eff1f3,#b4bfe0 var(--ef-moonsky))}
+.ef-light #ef-sky stop:nth-child(9){stop-color:color-mix(in srgb,#f2f3f5,#b4bfe0 var(--ef-moonsky))}
+.ef-light #ef-sky stop:nth-child(10){stop-color:color-mix(in srgb,#f4f5f6,#b4bfe0 var(--ef-moonsky))}
+}
 ]]></style>
 <linearGradient id="ef-sky" x1="0" y1="0" x2="0" y2="1">
 <stop offset="0" stop-color="#5d646c"/><stop offset=".107" stop-color="#494e54"/><stop offset=".213" stop-color="#393e44"/>

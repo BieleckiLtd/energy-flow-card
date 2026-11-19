@@ -110,9 +110,9 @@ function mix(hex, other, t) {
   return "#" + a.map((v, i) => Math.round(v + (b[i] - v) * t).toString(16).padStart(2, "0")).join("");
 }
 export const validColor = (hex) => !!rgb(hex);
-// A light wall dimmed as the sky darkens (see .ef-light in the svg), where the browser has color-mix.
+// A light wall tinted by moonlight as the sky darkens (see .ef-light in the svg), where the browser has color-mix.
 const DUSK = typeof CSS !== "undefined" && CSS.supports?.("color", "color-mix(in srgb, red, blue 10%)");
-const dusk = (c) => (DUSK ? `color-mix(in srgb, ${c}, #2a2e35 calc(var(--ef-darkness, 0) * 42%))` : c);
+const dusk = (c) => (DUSK ? `color-mix(in srgb, ${c}, #8e9cc4 calc(var(--ef-darkness, 0) * 26%))` : c);
 
 // Every colour the picture takes from the config, as the SVG's custom properties. Only colours that differ from
 // the drawing's own are set, so an untouched card looks exactly as drawn (in light mode, as the .ef-light rule has it).
@@ -1900,7 +1900,7 @@ export class EnergyFlowView {
   }
 
   // White ink over a dark background, brighter over a lighter one, and a dark halo over a bright one. In light mode
-  // the ink stays dark, with a white glow over a dark patch (ef-ink-bright); at night that ink is white (see the svg).
+  // the ink stays dark, day and night, with a white glow over a dark patch (ef-ink-bright).
   ink(label, luminance) {
     if (this.svg.classList.contains("ef-light")) {
       const dark = luminance < (label.classList.contains("ef-ink-bright") ? .45 : .4);
