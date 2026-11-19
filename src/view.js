@@ -1024,12 +1024,15 @@ export class EnergyFlowView {
   // more on a tablet) each time the card scrolled in or out of view (issue #3). force: also animations started since.
   syncAnimations(force = false) {
     const run = this.pulsesRun();
-    if ((!force && run === this.animationsRun) || !this.svg.getAnimations) return;
+    if (!force && run === this.animationsRun) return;
     this.animationsRun = run;
+    // Without the API, the old rule on every element (slow to switch, but nothing keeps running off screen).
+    if (!this.svg.getAnimations) { this.svg.classList.toggle("ef-paused", !run); return; }
     // Only the ones it paused are played again (play() would start a finished one over), and without a look at
     // playState: reading it settles the styles again for each animation in turn (30 ms).
     if (run) {
-      for (const a of this.held || []) a.play();
+      // only those still there: CSS cancels one whose rule went while it rested (the stars when rain came)
+      if (this.held) for (const a of this.svg.getAnimations({ subtree: true })) if (this.held.has(a)) a.play();
       this.held = null;
       return;
     }
@@ -1113,7 +1116,7 @@ export class EnergyFlowView {
     if (this.bothBatteries !== undefined && this.bothBatteries !== both && !this.svg.classList.contains("ef-still")) {
       this.svg.classList.add("ef-relabel");
       clearTimeout(this.relabel);
-      this.relabel = setTimeout(() => this.svg.classList.remove("ef-relabel"), 700);
+      this.relabel = setTimeout(() => { this.svg.classList.remove("ef-relabel"); this.restAgain(); }, 700);
     }
     this.bothBatteries = both;
     this.alignLabels();
@@ -1305,6 +1308,7 @@ export class EnergyFlowView {
         if (!el.classList.contains("ef-gone")) return;
         this.pulse(lane, false);
         this.pulses?.update();
+        this.restAgain();
       }, LANE_FADE);
     }
   }
@@ -1503,6 +1507,7 @@ export class EnergyFlowView {
         for (const piece of this.pulses?.pieces || []) piece.key = null;
         this.pulses?.update();
         this.alignBeats();  // the svg's own pulses, where they draw them, start in step
+        this.restAgain();
       }, GARAGE_MOVES);
     }
     this.svg.classList.toggle("ef-garage-open", open);
@@ -1634,7 +1639,12 @@ export class EnergyFlowView {
       this.svg.classList.remove("ef-still");
     }
     this.scheduleLabelContrast();
-    if (!this.pulsesRun()) this.syncAnimations(true);  // ones the readings started while it rests
+    this.restAgain();
+  }
+
+  // Animations started while the picture rests (by readings, or by a timer below once a slide is over) pause too.
+  restAgain() {
+    if (!this.pulsesRun()) this.syncAnimations(true);
   }
 
   // Home's other loads (pool, A/C...), listed above its label: [{ name, power (W), entity }]. A load drawing less than
@@ -1666,6 +1676,7 @@ export class EnergyFlowView {
         this.extrasScroll = () => this.fadeExtras();
         rows.addEventListener("scroll", this.extrasScroll, { passive: true });
         rows.addEventListener("transitionend", this.extrasScroll);
+        this.scrollExtrasBy(rows);
       }
     }
     list.forEach((e, i) => {
@@ -1709,12 +1720,47 @@ export class EnergyFlowView {
     }
   }
 
+  // The list is overflow:hidden (Safari draws nothing of a natively scrolling foreignObject), so wheel and touch move
+  // it here. At an end the gesture goes on to the page; a touch settles on a whole row.
+  scrollExtrasBy(rows) {
+    const room = (dy) => dy < 0 ? rows.scrollTop > 0 : rows.scrollTop < rows.scrollHeight - rows.clientHeight - 1;
+    const units = () => rows.clientHeight / (rows.getBoundingClientRect().height || rows.clientHeight || 1);
+    rows.addEventListener("wheel", (e) => {
+      const dy = e.deltaY * (e.deltaMode === 1 ? EXTRA_ROW : 1);
+      if (!dy || !room(dy)) return;
+      e.preventDefault();
+      rows.scrollTop += dy * units();
+    }, { passive: false });
+    let lastY = null;
+    rows.addEventListener("touchstart", (e) => { lastY = e.touches[0].clientY; }, { passive: true });
+    rows.addEventListener("touchmove", (e) => {
+      if (lastY === null) return;
+      const y = e.touches[0].clientY, dy = lastY - y;
+      if (!room(dy)) { lastY = null; return; }  // the rest of this touch scrolls the page
+      e.preventDefault();
+      lastY = y;
+      rows.scrollTop += dy * units();
+    }, { passive: false });
+    rows.addEventListener("touchend", () => {
+      lastY = null;
+      rows.scrollTo?.({ top: Math.round(rows.scrollTop / EXTRA_ROW) * EXTRA_ROW, behavior: "smooth" });
+    }, { passive: true });
+  }
+
   fadeExtras() {
     this.inkExtras();
     const rows = this.part("ef-extras").firstElementChild;
-    const below = rows.scrollHeight - rows.clientHeight - rows.scrollTop > 1, above = rows.scrollTop > 1;
-    rows.style.setProperty("--ef-fade-top", above ? `${EXTRA_ROW * .6}px` : "0px");
-    rows.style.setProperty("--ef-fade-bottom", below ? `${EXTRA_ROW * .6}px` : "0px");
+    // The row cut by an edge with more beyond it fades (a mask did this, which Safari cannot draw in a foreignObject).
+    // Measured on screen from the rows that are there: Safari loses a positioned list in a foreignObject (no offsetTop
+    // to count from), and the folded rows' slide adds scroll room below that holds nothing.
+    const box = rows.getBoundingClientRect();
+    const shown = [...rows.children].map((row) => ({ row, r: row.getBoundingClientRect() })).filter((x) => x.r.height > 1);
+    const above = shown.length > 0 && shown[0].r.top < box.top - 1;
+    const below = shown.length > 0 && shown[shown.length - 1].r.bottom > box.bottom + 1;
+    for (const row of rows.children) row.classList.remove("ef-extra-edge");
+    for (const { row, r } of shown) {
+      if ((above && r.top < box.top - 1) || (below && r.bottom > box.bottom + 1)) row.classList.add("ef-extra-edge");
+    }
   }
 
   // Air temperature in °C, or nothing. The shimmer grows a little stronger with the heat.

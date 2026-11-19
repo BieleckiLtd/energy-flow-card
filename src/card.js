@@ -115,6 +115,7 @@ export class EnergyFlowCard extends HTMLElement {
   setConfig(config) {
     if (!config || typeof config !== "object") throw new Error("Invalid configuration");
     this.rawConfig = config;
+    this.watchedFor = null;  // the same object may come back changed: its entities are read again
     this.config = normalizeConfig(config);
     this.local = {};  // taps without an entity last until the config changes
     this.titleEl.textContent = this.config.title;
