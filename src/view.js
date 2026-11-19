@@ -112,7 +112,7 @@ function mix(hex, other, t) {
 export const validColor = (hex) => !!rgb(hex);
 // A light wall tinted by moonlight as the sky darkens (see .ef-light in the svg), where the browser has color-mix.
 const DUSK = typeof CSS !== "undefined" && CSS.supports?.("color", "color-mix(in srgb, red, blue 10%)");
-const dusk = (c) => (DUSK ? `color-mix(in srgb, ${c}, #8e9cc4 calc(var(--ef-darkness, 0) * 26%))` : c);
+const dusk = (c) => (DUSK ? `color-mix(in srgb, ${c}, var(--ef-n-wall, #8e9cc4) calc(var(--ef-darkness, 0) * var(--ef-n-wall-p, 26%)))` : c);
 
 // Every colour the picture takes from the config, as the SVG's custom properties. Only colours that differ from
 // the drawing's own are set, so an untouched card looks exactly as drawn (in light mode, as the .ef-light rule has it).

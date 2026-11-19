@@ -307,7 +307,7 @@
 .ef-light #ef-labels .ef-ink-bright{filter:drop-shadow(0 0 3px rgb(255 255 255/.9)) drop-shadow(0 0 12px rgb(255 255 255/.75))}
 .ef-light .ef-extra-name{color:#55595f}
 .ef-light .ef-extra-val{color:#1b1c1e}
-.ef-light .ef-extra.ef-ink-bright span{text-shadow:0 0 3px rgb(255 255 255/.9),0 0 9px rgb(255 255 255/.6)}
+.ef-light .ef-extra.ef-ink-bright span{text-shadow:0 0 3px rgb(255 255 255/.55),0 0 8px rgb(255 255 255/.3)}
 .ef-light .ef-extra.ef-extra-edge .ef-extra-name{color:rgb(85 89 95/.3)}
 .ef-light .ef-extra.ef-extra-edge .ef-extra-val{color:rgb(27 28 30/.3)}
 .ef-light .ef-lead{stroke:#3a3d42;stroke-opacity:.5}
@@ -319,26 +319,55 @@
 .ef-light #ef-rain{stroke:#4f5964}
 .ef-light #ef-snow{stroke:#8d97a2;stroke-width:.8;stroke-opacity:.55}
 .ef-light .ef-reflection{opacity:.16}
-/* At night (light mode): a deep blue sky over lavender ground, the walls still light in a cool moonlit tint, the
-   roof blue-grey (where color-mix works; elsewhere they stay as by day). */
+/* a warm lit window, brighter after dark */
+.ef-light{--ef-window-1:#f7efdc;--ef-window-2:#e9dcbf;--ef-window-mirror:#f3e8cf}
+.ef-light[data-time=night]{--ef-window-1:#fde8bd;--ef-window-2:#f1cf92;--ef-window-mirror:#f9dfab}
+/* At night (light mode). Clear: a deep blue sky over lavender ground, the walls still light in a cool moonlit
+   tint, the roof blue-grey. Overcast: a slate sky, grey-lavender walls, a dark slate roof, door and pipes. The tints
+   follow the sky's darkness, where color-mix works; elsewhere the house stays as by day. */
+.ef-light{--ef-n-wall:#8e9cc4;--ef-n-wall-p:26%;--ef-n-roof:#3c4a78;--ef-n-roof-p:45%;--ef-n-door:#8e9cc4;--ef-n-door-p:26%;
+  --ef-n-sky:#b4bfe0;--ef-n-sky-p:62%}
+.ef-light:is([data-weather=cloudy],[data-weather=fog],[data-weather=drizzle],[data-weather=rain],[data-weather=heavy],[data-weather=snow],[data-weather=storm]){--ef-n-wall:#6f768b;--ef-n-wall-p:40%;--ef-n-roof:#262b3a;--ef-n-roof-p:62%;--ef-n-door:#363c4d;--ef-n-door-p:72%;
+  --ef-n-sky:#b0b6c6;--ef-n-sky-p:72%}
 .ef-light #ef-night-g stop:nth-child(1){stop-color:#0f2457;stop-opacity:.95}
 .ef-light #ef-night-g stop:nth-child(2){stop-color:#3550a0;stop-opacity:.62}
 .ef-light #ef-night-g stop:nth-child(3){stop-color:#9aaad6}
+.ef-light:is([data-weather=cloudy],[data-weather=fog],[data-weather=drizzle],[data-weather=rain],[data-weather=heavy],[data-weather=snow],[data-weather=storm]) #ef-night-g stop:nth-child(1){stop-color:#4c5368;stop-opacity:.95}
+.ef-light:is([data-weather=cloudy],[data-weather=fog],[data-weather=drizzle],[data-weather=rain],[data-weather=heavy],[data-weather=snow],[data-weather=storm]) #ef-night-g stop:nth-child(2){stop-color:#8a90a3;stop-opacity:.5}
+.ef-light:is([data-weather=cloudy],[data-weather=fog],[data-weather=drizzle],[data-weather=rain],[data-weather=heavy],[data-weather=snow],[data-weather=storm]) #ef-night-g stop:nth-child(3){stop-color:#aab0c1}
 .ef-light[data-time=night] .ef-lead{stroke:#fff;stroke-opacity:.75}
+.ef-light[data-time=night]:is([data-weather=cloudy],[data-weather=fog],[data-weather=drizzle],[data-weather=rain],[data-weather=heavy],[data-weather=snow],[data-weather=storm]) .ef-lead{stroke:#3a3d45;stroke-opacity:.55}
+/* overcast night: darker pipes, panel frames and meter box */
+.ef-light[data-time=night]:is([data-weather=cloudy],[data-weather=fog],[data-weather=drizzle],[data-weather=rain],[data-weather=heavy],[data-weather=snow],[data-weather=storm]) :is(.ef-lane,.ef-line .ef-lane){stroke:#686d7b}
+.ef-light[data-time=night]:is([data-weather=cloudy],[data-weather=fog],[data-weather=drizzle],[data-weather=rain],[data-weather=heavy],[data-weather=snow],[data-weather=storm]) .ef-line .ef-pipe-shade{stroke-opacity:.18}
+.ef-light[data-time=night]:is([data-weather=cloudy],[data-weather=fog],[data-weather=drizzle],[data-weather=rain],[data-weather=heavy],[data-weather=snow],[data-weather=storm]) #ef-panel-frame stop:nth-child(1){stop-color:#545967}
+.ef-light[data-time=night]:is([data-weather=cloudy],[data-weather=fog],[data-weather=drizzle],[data-weather=rain],[data-weather=heavy],[data-weather=snow],[data-weather=storm]) #ef-panel-frame stop:nth-child(2){stop-color:#4a4f5c}
+.ef-light[data-time=night]:is([data-weather=cloudy],[data-weather=fog],[data-weather=drizzle],[data-weather=rain],[data-weather=heavy],[data-weather=snow],[data-weather=storm]) #ef-panel-frame stop:nth-child(3){stop-color:#414551}
+.ef-light[data-time=night]:is([data-weather=cloudy],[data-weather=fog],[data-weather=drizzle],[data-weather=rain],[data-weather=heavy],[data-weather=snow],[data-weather=storm]) #ef-panel-edge stop{stop-color:#353844}
+.ef-light[data-time=night]:is([data-weather=cloudy],[data-weather=fog],[data-weather=drizzle],[data-weather=rain],[data-weather=heavy],[data-weather=snow],[data-weather=storm]) #ef-meter-face stop:nth-child(1){stop-color:#9a9eaa}
+.ef-light[data-time=night]:is([data-weather=cloudy],[data-weather=fog],[data-weather=drizzle],[data-weather=rain],[data-weather=heavy],[data-weather=snow],[data-weather=storm]) #ef-meter-face stop:nth-child(2){stop-color:#8a8e9a}
+.ef-light[data-time=night]:is([data-weather=cloudy],[data-weather=fog],[data-weather=drizzle],[data-weather=rain],[data-weather=heavy],[data-weather=snow],[data-weather=storm]) #ef-meter-face stop:nth-child(3){stop-color:#7b7f8b}
+.ef-light[data-time=night]:is([data-weather=cloudy],[data-weather=fog],[data-weather=drizzle],[data-weather=rain],[data-weather=heavy],[data-weather=snow],[data-weather=storm]) #ef-meter-side stop{stop-color:#646875}
+.ef-light[data-time=night]:is([data-weather=cloudy],[data-weather=fog],[data-weather=drizzle],[data-weather=rain],[data-weather=heavy],[data-weather=snow],[data-weather=storm]) [fill="#6d6d6f"]{fill:#80848f}
+.ef-light[data-time=night]:is([data-weather=cloudy],[data-weather=fog],[data-weather=drizzle],[data-weather=rain],[data-weather=heavy],[data-weather=snow],[data-weather=storm]) #ef-garage-slat stop:nth-child(1){stop-color:#6c7282}
+.ef-light[data-time=night]:is([data-weather=cloudy],[data-weather=fog],[data-weather=drizzle],[data-weather=rain],[data-weather=heavy],[data-weather=snow],[data-weather=storm]) #ef-garage-slat stop:nth-child(2){stop-color:#5a6070}
+.ef-light[data-time=night]:is([data-weather=cloudy],[data-weather=fog],[data-weather=drizzle],[data-weather=rain],[data-weather=heavy],[data-weather=snow],[data-weather=storm]) #ef-garage-slat stop:nth-child(3){stop-color:#454a58}
 @supports (color:color-mix(in srgb,red,blue 10%)){
-.ef-light{--ef-moonlit:calc(var(--ef-darkness,0) * 26%);--ef-moonroof:calc(var(--ef-darkness,0) * 45%);--ef-moonsky:calc(var(--ef-darkness,0) * 62%);
-  --ef-wall-1:color-mix(in srgb,#f4f4f3,#8e9cc4 var(--ef-moonlit));--ef-wall-2:color-mix(in srgb,#eeeeed,#8e9cc4 var(--ef-moonlit));--ef-gable-1:color-mix(in srgb,#e2e4e7,#8e9cc4 var(--ef-moonlit));--ef-gable-2:color-mix(in srgb,#d9dbdf,#8e9cc4 var(--ef-moonlit));--ef-garage-wall:color-mix(in srgb,#e4e6e9,#8e9cc4 var(--ef-moonlit));--ef-jamb:color-mix(in srgb,#c9cbcf,#8e9cc4 var(--ef-moonlit));--ef-door:color-mix(in srgb,#eceef0,#8e9cc4 var(--ef-moonlit));--ef-door-line:color-mix(in srgb,#cdd0d4,#8e9cc4 var(--ef-moonlit));
-  --ef-roof-1:color-mix(in srgb,#8f9297,#3c4a78 var(--ef-moonroof));--ef-roof-2:color-mix(in srgb,#85888d,#3c4a78 var(--ef-moonroof));--ef-roof-3:color-mix(in srgb,#7f8287,#3c4a78 var(--ef-moonroof));--ef-roof-back-1:color-mix(in srgb,#94979c,#3c4a78 var(--ef-moonroof));--ef-roof-back-2:color-mix(in srgb,#8a8d92,#3c4a78 var(--ef-moonroof));--ef-roof-edge:color-mix(in srgb,#a4a7ab,#3c4a78 var(--ef-moonroof));--ef-roof-line:color-mix(in srgb,#7c7f84,#3c4a78 var(--ef-moonroof));--ef-fascia:color-mix(in srgb,#a8abaf,#3c4a78 var(--ef-moonroof));--ef-roof-ridge:color-mix(in srgb,#b8bbbf,#3c4a78 var(--ef-moonroof))}
-.ef-light #ef-sky stop:nth-child(1){stop-color:color-mix(in srgb,#c9d0d8,#b4bfe0 var(--ef-moonsky))}
-.ef-light #ef-sky stop:nth-child(2){stop-color:color-mix(in srgb,#d1d7de,#b4bfe0 var(--ef-moonsky))}
-.ef-light #ef-sky stop:nth-child(3){stop-color:color-mix(in srgb,#d8dde3,#b4bfe0 var(--ef-moonsky))}
-.ef-light #ef-sky stop:nth-child(4){stop-color:color-mix(in srgb,#dde1e6,#b4bfe0 var(--ef-moonsky))}
-.ef-light #ef-sky stop:nth-child(5){stop-color:color-mix(in srgb,#e3e6ea,#b4bfe0 var(--ef-moonsky))}
-.ef-light #ef-sky stop:nth-child(6){stop-color:color-mix(in srgb,#e8eaed,#b4bfe0 var(--ef-moonsky))}
-.ef-light #ef-sky stop:nth-child(7){stop-color:color-mix(in srgb,#ebedf0,#b4bfe0 var(--ef-moonsky))}
-.ef-light #ef-sky stop:nth-child(8){stop-color:color-mix(in srgb,#eff1f3,#b4bfe0 var(--ef-moonsky))}
-.ef-light #ef-sky stop:nth-child(9){stop-color:color-mix(in srgb,#f2f3f5,#b4bfe0 var(--ef-moonsky))}
-.ef-light #ef-sky stop:nth-child(10){stop-color:color-mix(in srgb,#f4f5f6,#b4bfe0 var(--ef-moonsky))}
+.ef-light{--ef-moonlit:calc(var(--ef-darkness,0) * var(--ef-n-wall-p));--ef-moonroof:calc(var(--ef-darkness,0) * var(--ef-n-roof-p));
+  --ef-moondoor:calc(var(--ef-darkness,0) * var(--ef-n-door-p));--ef-moonsky:calc(var(--ef-darkness,0) * var(--ef-n-sky-p));
+  --ef-wall-1:color-mix(in srgb,#f4f4f3,var(--ef-n-wall) var(--ef-moonlit));--ef-wall-2:color-mix(in srgb,#eeeeed,var(--ef-n-wall) var(--ef-moonlit));--ef-gable-1:color-mix(in srgb,#e2e4e7,var(--ef-n-wall) var(--ef-moonlit));--ef-gable-2:color-mix(in srgb,#d9dbdf,var(--ef-n-wall) var(--ef-moonlit));--ef-garage-wall:color-mix(in srgb,#e4e6e9,var(--ef-n-wall) var(--ef-moonlit));--ef-jamb:color-mix(in srgb,#c9cbcf,var(--ef-n-wall) var(--ef-moonlit));
+  --ef-door:color-mix(in srgb,#eceef0,var(--ef-n-door) var(--ef-moondoor));--ef-door-line:color-mix(in srgb,#cdd0d4,var(--ef-n-door) var(--ef-moondoor));
+  --ef-roof-1:color-mix(in srgb,#8f9297,var(--ef-n-roof) var(--ef-moonroof));--ef-roof-2:color-mix(in srgb,#85888d,var(--ef-n-roof) var(--ef-moonroof));--ef-roof-3:color-mix(in srgb,#7f8287,var(--ef-n-roof) var(--ef-moonroof));--ef-roof-back-1:color-mix(in srgb,#94979c,var(--ef-n-roof) var(--ef-moonroof));--ef-roof-back-2:color-mix(in srgb,#8a8d92,var(--ef-n-roof) var(--ef-moonroof));--ef-roof-edge:color-mix(in srgb,#a4a7ab,var(--ef-n-roof) var(--ef-moonroof));--ef-roof-line:color-mix(in srgb,#7c7f84,var(--ef-n-roof) var(--ef-moonroof));--ef-fascia:color-mix(in srgb,#a8abaf,var(--ef-n-roof) var(--ef-moonroof));--ef-roof-ridge:color-mix(in srgb,#b8bbbf,var(--ef-n-roof) var(--ef-moonroof))}
+.ef-light #ef-sky stop:nth-child(1){stop-color:color-mix(in srgb,#c9d0d8,var(--ef-n-sky) var(--ef-moonsky))}
+.ef-light #ef-sky stop:nth-child(2){stop-color:color-mix(in srgb,#d1d7de,var(--ef-n-sky) var(--ef-moonsky))}
+.ef-light #ef-sky stop:nth-child(3){stop-color:color-mix(in srgb,#d8dde3,var(--ef-n-sky) var(--ef-moonsky))}
+.ef-light #ef-sky stop:nth-child(4){stop-color:color-mix(in srgb,#dde1e6,var(--ef-n-sky) var(--ef-moonsky))}
+.ef-light #ef-sky stop:nth-child(5){stop-color:color-mix(in srgb,#e3e6ea,var(--ef-n-sky) var(--ef-moonsky))}
+.ef-light #ef-sky stop:nth-child(6){stop-color:color-mix(in srgb,#e8eaed,var(--ef-n-sky) var(--ef-moonsky))}
+.ef-light #ef-sky stop:nth-child(7){stop-color:color-mix(in srgb,#ebedf0,var(--ef-n-sky) var(--ef-moonsky))}
+.ef-light #ef-sky stop:nth-child(8){stop-color:color-mix(in srgb,#eff1f3,var(--ef-n-sky) var(--ef-moonsky))}
+.ef-light #ef-sky stop:nth-child(9){stop-color:color-mix(in srgb,#f2f3f5,var(--ef-n-sky) var(--ef-moonsky))}
+.ef-light #ef-sky stop:nth-child(10){stop-color:color-mix(in srgb,#f4f5f6,var(--ef-n-sky) var(--ef-moonsky))}
 }
 ]]></style>
 <linearGradient id="ef-sky" x1="0" y1="0" x2="0" y2="1">
