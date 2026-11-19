@@ -406,7 +406,11 @@ function fitCanvas(canvas, svg, cap = Infinity) {
   let left = box.left - host.left - parent.clientLeft, top = box.top - host.top - parent.clientTop;
   if (width / height > 1170 / 1408) { left += (width - height * 1170 / 1408) / 2; width = height * 1170 / 1408; }
   else { top += (height - width * 1408 / 1170) / 2; height = width * 1408 / 1170; }
-  Object.assign(canvas.style, { left: `${left}px`, top: `${top}px`, width: `${width}px`, height: `${height}px` });
+  // In percentages of the host, so the canvas keeps to the picture through a resize before this runs again: turning
+  // an iPhone holds back the resize callbacks for the length of the turn, and pixels left the pulses behind.
+  const pw = parent.clientWidth || host.width, ph = parent.clientHeight || host.height;
+  const pct = (v, of) => `${(v / of * 100).toFixed(4)}%`;
+  Object.assign(canvas.style, { left: pct(left, pw), top: pct(top, ph), width: pct(width, pw), height: pct(height, ph) });
   const density = Math.min(devicePixelRatio || 1, cap, 2048 / width);
   return { w: Math.round(width * density), h: Math.round(height * density) };
 }
