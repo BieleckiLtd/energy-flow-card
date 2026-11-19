@@ -152,7 +152,7 @@
    no ripples, still fog and stars. */
 .ef-lite .ef-streaks path:nth-child(2n),.ef-lite #ef-ripples ellipse:nth-child(2n),.ef-lite #ef-snow circle:nth-child(2n){display:none}
 .ef-low .ef-streaks path:nth-child(4n+3),.ef-low #ef-ripples,.ef-low #ef-snow circle:nth-child(4n+3){display:none}
-.ef-low #ef-fog ellipse,.ef.ef-low[data-weather][data-time] #ef-stars circle{animation:none}
+.ef-low #ef-fog ellipse,.ef.ef-low[data-weather][data-time] #ef-stars circle,.ef-low #ef-drift{animation:none}
 .ef[data-weather=drizzle] .ef-streaks path:nth-child(2n),.ef[data-weather=drizzle] #ef-ripples ellipse:nth-child(2n){display:none}
 #ef-drift{animation:ef-drift 150s linear infinite}
 #ef-fog ellipse{animation:ef-sway 46s ease-in-out infinite alternate}

@@ -16,7 +16,7 @@ const FROST_START = 3;  // °C: frost begins to form here...
 const FROST_FULL = -10;  // ...and is fully grown here
 const GARAGE_MOVES = 1800;  // ms the shutter takes to roll up or down, with its delay
 const EXTRA_ROW = 38;  // picture units between the rows of home's other loads (the list's line-height)
-const EXTRA_ROWS = 3.5;  // rows in sight at most: the half row shows the list goes on
+const EXTRA_ROWS = 5.5;  // rows in sight at most, up into the sky above home: the half row shows the list goes on
 const EXTRA_BOTTOM = 252;  // where the list ends, just above the home label
 
 // The weather the picture can draw, and how much of the sky (sun, moon, twilight) shows through each.
@@ -483,7 +483,7 @@ class PulseRenderer {
     this.frame = (now) => {
       this.raf = 0;
       this.draw(now);
-      if (this.view.pulsesRun()) this.raf = requestAnimationFrame(this.frame);
+      if (this.view.pulsesRun()) this.next();
     };
     this.pieces = this.findPieces();
     this.resizer = typeof ResizeObserver === "function" ? new ResizeObserver(() => this.place()) : null;
@@ -614,6 +614,7 @@ class PulseRenderer {
   // After each reading: which pieces run, which way, in what colour, on which beat.
   update() {
     if (this.failed || !this.svg.isConnected) return;  // off the page nothing has a computed style to read
+    this.lineStates = null;  // lanes may start to slide: draw() reads them again
     const view = this.view, cd = view.cycleDistance, svg = this.svg;
     // Computed styles are read only for pieces whose flow, colours or lane changed: after the readings went in,
     // the first such read makes the browser restyle the whole picture, which on a tablet took ~350 ms every poll
@@ -769,16 +770,30 @@ class PulseRenderer {
     this.sync();
   }
 
+  // The next frame: at once on high, else after a pause (a timer, so the page is not woken every screen refresh).
+  next() {
+    if (this.raf || this.wait) return;
+    const fps = LEVELS[this.view.level]?.fps ?? Infinity;
+    if (!Number.isFinite(fps)) { this.raf = requestAnimationFrame(this.frame); return; }
+    this.wait = setTimeout(() => { this.wait = 0; this.raf = requestAnimationFrame(this.frame); }, Math.max(0, 1000 / fps - 8));
+  }
+
+  stopFrames() {
+    cancelAnimationFrame(this.raf);
+    clearTimeout(this.wait);
+    this.raf = this.wait = 0;
+  }
+
   sync() {
     if (!this.ready) return;
-    if (this.view.pulsesRun()) { if (!this.raf) this.raf = requestAnimationFrame(this.frame); }
-    else { cancelAnimationFrame(this.raf); this.raf = 0; this.draw(performance.now()); }
+    if (this.view.pulsesRun()) this.next();
+    else { this.stopFrames(); this.draw(performance.now()); }
   }
 
   destroy() {
     if (this.dead) return;  // once: a lost context fires again on a renderer already gone
     this.dead = true;
-    cancelAnimationFrame(this.raf);
+    this.stopFrames();
     clearTimeout(this.maskTimer);
     this.failed = true;
     this.gl?.getExtension("WEBGL_lose_context")?.loseContext();
@@ -799,14 +814,16 @@ class PulseRenderer {
     gl.uniform1f(u.u_aa, 1170 / this.canvas.width);
     gl.uniform4f(u.u_box, ...this.box);
     gl.activeTexture(gl.TEXTURE0);
-    const lines = new Map();  // each lane looked at once a frame: [moving, opacity]
+    // Each lane's [moving, opacity], read once after a reading and then only while it slides: a style read every
+    // frame made the browser bring the picture's styles up to date every frame.
+    const lines = this.lineStates ??= new Map();
     for (const piece of this.pieces) {
       if (!piece.shown) continue;
       let alpha = 1;
       if (piece.line) {
         // a lane that comes or goes fades and slides (CSS transitions): follow it while it moves, and once more
         // after a reading, as a slide that ran while no frames were drawn (tab in the background) is over by now
-        if (!lines.has(piece.line)) {
+        if (!lines.has(piece.line) || lines.get(piece.line)[0]) {
           const ls = getComputedStyle(piece.line);
           lines.set(piece.line, [piece.line.getAnimations?.().length > 0, ls.visibility === "hidden" ? 0 : parseFloat(ls.opacity)]);
         }
@@ -844,9 +861,10 @@ class PulseRenderer {
 // answer are remembered on the device. "high", "medium" and "low" fix the level for every device.
 export const EFFECTS = ["auto", "high", "medium", "low"];
 const LEVELS = {
-  high: { cap: Infinity, shimmer: true, label: "High" },
-  medium: { cap: 1.5, shimmer: false, label: "Medium" },
-  low: { cap: 1, shimmer: false, label: "Low" },
+  // fps: how often the pulse layer draws. The pulses move slowly, and each frame costs a phone's GPU and battery.
+  high: { cap: Infinity, shimmer: true, fps: Infinity, label: "High" },
+  medium: { cap: 1.5, shimmer: false, fps: 30, label: "Medium" },
+  low: { cap: 1, shimmer: false, fps: 20, label: "Low" },
 };
 const OLD_EFFECTS = { full: "high", reduced: "low" };  // the names in 0.4.0
 export const effectsLevel = (value) => OLD_EFFECTS[value] ?? (EFFECTS.includes(value) ? value : "auto");

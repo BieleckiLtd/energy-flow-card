@@ -64,7 +64,7 @@ battery2:
 | `face` (or `glass`) | batteries | Colour of the glass cover, any `#rrggbb` |
 | `show` | solar, battery1, battery2 | The batteries are on by default; `show: false` (or `battery1: false`, `battery2: false`) takes one out, and the other's label and the grid's then centre on their leaders. Battery 2 shows only alongside battery 1. Without battery 1 the grid's label moves left into the room, and solar's does without an EV label. Solar shows once it has a sensor |
 | `weather` | card | A `weather.*` entity; without one the sky is clear |
-| `extras` | home | Loads within the home reading (pool, A/C...), each a power sensor or `{ name, entity, invert }`. Listed above the home label; a load under 0.05 kW folds away, and more than three scroll |
+| `extras` | home | Loads within the home reading (pool, A/C...), each a power sensor or `{ name, entity, invert }`. Listed above the home label; a load under 0.05 kW folds away, and more than five scroll |
 | `garage` | card | `on` (or `open`, `1`) rolls the garage shutter up: a car parked nose in, plugged into an EV charger on the side wall; `off` (`0`, the default) keeps it shut. Or a `cover`, `switch` or `light` entity: the shutter follows it, and a tap on the shutter toggles it. Without an entity a tap opens or shuts it in the picture alone |
 | `lights` | card | The house lights: `on` (default) or `off` (the room behind the window goes dark), or a `light` or `switch` entity that a tap on the window toggles. |
 | `ev` | card | The car's power sensor (or `{ entity, soc, name, color, invert }`, `soc` its charge in %): + charging, − the car giving power out (vehicle-to-home or -grid). The EV label shows its power (0 kW when idle) and charge, ▲ charging and ▼ giving out, pointing at the garage door, or with the garage on at the car, with pulses on the charger's cable coloured by what feeds the car (`color` when it gives power out). Without a home sensor, home is worked out with the car's power set aside |
@@ -80,7 +80,8 @@ Tap a label to open that sensor's details.
 
 The pulses and the heat shimmer are drawn on the GPU, and the picture is detailed. On an old tablet or phone, set
 `effects: low` (or `medium`): the card then draws at a lower resolution and leaves the shimmer out, which takes much
-less memory. `auto` only steps down by itself once it has seen the animation run choppy for a while. If a dashboard
+less memory, and draws the pulses 20 (or 30) times a second instead of at the screen's rate; on `low` the clouds stand
+still. That spares the battery too. `auto` only steps down by itself once it has seen the animation run choppy for a while. If a dashboard
 reloads by itself on such a device, this is the setting to try first.
 
 ## Weather
