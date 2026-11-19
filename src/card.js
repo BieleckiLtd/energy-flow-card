@@ -93,8 +93,13 @@ export class EnergyFlowCard extends HTMLElement {
     }
     clearTimeout(this.leaving);
     if (this._hass) this.startClock();
-    if (this.view.suspended) { this.view.resume(); this.render(); }
-    this.render();  // the readings that came in before it was on the page: now the pulses can be measured
+    if (this.view.suspended) this.view.resume();
+    // The readings that came in before it was on the page. Inside a fresh <ha-card> the picture is not drawn (no slot
+    // yet, so no computed styles) until ha-card has rendered: measured before that, every pulse came out as nothing
+    // and the lines never moved (issue #1 again in 0.8.0).
+    const haCard = this.shadowRoot.querySelector("ha-card");
+    if (haCard?.updateComplete && !haCard.hasUpdated) haCard.updateComplete.then(() => { if (this.isConnected) this.render(); });
+    else this.render();
   }
 
   disconnectedCallback() {
@@ -124,10 +129,29 @@ export class EnergyFlowCard extends HTMLElement {
     this.render();
   }
 
+  // Home Assistant sets hass on every state change in the house, many a second in a big one. The picture is drawn
+  // again only when one of the card's own entities (or HA's location and units) changed: drawing on each of them
+  // kept older devices busy and the whole dashboard sluggish (issue #3).
   set hass(hass) {
+    const old = this._hass;
     this._hass = hass;
     if (!this.clock && this.isConnected) this.startClock();
+    if (old && old.config === hass.config && this.watched().every((e) => old.states[e] === hass.states[e])) return;
     this.render();
+  }
+
+  // Every entity in the config, as written: the parts' sensors, extras, weather, temperature, garage and lights.
+  watched() {
+    if (this.watchedFor === this.rawConfig) return this.watchedList;
+    const found = new Set();
+    const walk = (v) => {
+      if (isEntity(v)) found.add(v.trim());
+      else if (Array.isArray(v)) v.forEach(walk);
+      else if (v && typeof v === "object") Object.values(v).forEach(walk);
+    };
+    walk(this.rawConfig);
+    this.watchedFor = this.rawConfig;
+    return (this.watchedList = [...found]);
   }
 
   get hass() { return this._hass; }

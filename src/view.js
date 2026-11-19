@@ -631,6 +631,12 @@ class PulseRenderer {
       for (let el = piece.group; shown && el && el !== this.svg; el = el.parentNode) if (getComputedStyle(el).display === "none") shown = false;
       piece.shown = shown;
       if (!shown) continue;
+      // Measured while the picture had no styles (not drawn yet): measured again now that it runs.
+      if (!piece.lengths.some(Boolean)) {
+        this.gl.deleteBuffer(piece.buffer);
+        this.measure(piece);
+        if (!piece.lengths.some(Boolean)) { piece.key = null; piece.shown = false; continue; }  // still nothing: next reading
+      }
       const turns = Number(flow.style.getPropertyValue("--ef-turns")) || 1;
       piece.lead = way === "in" ? 0 : 1;
       piece.direction = way === "in" ? 1 : -1;
