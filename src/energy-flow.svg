@@ -389,9 +389,21 @@
 /* the glossy ground mirrors further than the dark one */
 .ef-light :is(#ef-window-reflection-fade,#ef-b1-reflection-fade,#ef-b2-reflection-fade) stop:nth-child(2){stop-opacity:.75}
 .ef-light #ef-window-reflection-fade stop:nth-child(3){stop-opacity:.08}
-#ef-window-spill{opacity:calc(.2 + .8 * var(--ef-darkness,0))}
-.ef-lights-off #ef-window-spill,.ef-no-b1 :is(#ef-b1-spill,#ef-b1-ao),.ef-no-b2 #ef-b2-ao{display:none}
+#ef-window-spill{opacity:calc(.25 + .75 * var(--ef-darkness,0))}
+#ef-b1-glow{opacity:calc(.25 + .6 * var(--ef-darkness,0))}
+.ef-lights-off #ef-window-spill,.ef-no-b1 :is(#ef-b1-spill,#ef-b1-ao,#ef-b1-glow),.ef-no-b2 #ef-b2-ao{display:none}
 .ef.ef-light.ef-lights-off #ef-window-reflection{opacity:.03}
+/* Light mode details: slim grey window frames, a grey side to battery 1, lighter seams between the cells, panels not
+   blacked out at night, and metallic frames under an overcast night */
+.ef-light [fill="#141414"]{fill:#555a68}
+.ef-light [fill="#0c0c0c"]{fill:#474c5a}
+.ef-light #ef-b1-battery [fill="#161616"]{fill:#8f95a3}
+.ef-light #ef-b2-battery [fill="#18191b"]{fill:#5d6270}
+.ef-light [stroke="#0b0b0b"]{stroke:#29314c}
+.ef-light .ef-night-glass{opacity:calc(.25 * var(--ef-darkness,0))}
+.ef-light[data-time=night]:is([data-weather=cloudy],[data-weather=fog],[data-weather=drizzle],[data-weather=rain],[data-weather=heavy],[data-weather=snow],[data-weather=storm]) #ef-panel-frame stop:nth-child(1){stop-color:#7a8094}
+.ef-light[data-time=night]:is([data-weather=cloudy],[data-weather=fog],[data-weather=drizzle],[data-weather=rain],[data-weather=heavy],[data-weather=snow],[data-weather=storm]) #ef-panel-frame stop:nth-child(2){stop-color:#6c7286}
+.ef-light[data-time=night]:is([data-weather=cloudy],[data-weather=fog],[data-weather=drizzle],[data-weather=rain],[data-weather=heavy],[data-weather=snow],[data-weather=storm]) #ef-panel-frame stop:nth-child(3){stop-color:#5f6579}
 ]]></style>
 <linearGradient id="ef-sky" x1="0" y1="0" x2="0" y2="1">
 <stop offset="0" stop-color="#5d646c"/><stop offset=".107" stop-color="#494e54"/><stop offset=".213" stop-color="#393e44"/>
@@ -2661,6 +2673,8 @@
   <ellipse cx="-1.6" cy="-1.9" rx="2.4" ry="1.3" fill="#fff" opacity=".55" transform="rotate(-30 -1.6 -1.9)"/>
 </g>
 
+<!-- light mode: battery 1's lit level strip glowing on the wall beside it -->
+<g class="ef-light-only"><ellipse id="ef-b1-glow" cx="338" cy="985" rx="30" ry="96" fill="url(#ef-strip-spill)"/></g>
 <!-- light mode: the batteries' contact shadows on the ground -->
 <g class="ef-light-only" filter="url(#ef-ao-blur)">
   <path id="ef-b1-ao" d="M334 1066 426 1047" fill="none" stroke="#1b1f2c" stroke-opacity=".45" stroke-width="10"/>
@@ -3134,7 +3148,7 @@
 <filter id="ef-ao-blur" x="-10%" y="-60%" width="120%" height="220%"><feGaussianBlur stdDeviation="7"/></filter>
 <linearGradient id="ef-eave-shade" gradientUnits="userSpaceOnUse" x1="620" y1="733" x2="628" y2="790"><stop offset="0" stop-color="#1e2230" stop-opacity=".34"/><stop offset=".45" stop-color="#1e2230" stop-opacity=".12"/><stop offset="1" stop-color="#1e2230" stop-opacity="0"/></linearGradient>
 <linearGradient id="ef-rake-shade" gradientUnits="userSpaceOnUse" x1="180" y1="660" x2="150" y2="700"><stop offset="0" stop-color="#1e2230" stop-opacity=".3"/><stop offset="1" stop-color="#1e2230" stop-opacity="0"/></linearGradient>
-<radialGradient id="ef-window-spill" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#ffd48c" stop-opacity=".55"/><stop offset=".5" stop-color="#ffd48c" stop-opacity=".2"/><stop offset="1" stop-color="#ffd48c" stop-opacity="0"/></radialGradient>
+<radialGradient id="ef-window-spill" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#ffd590" stop-opacity=".8"/><stop offset=".5" stop-color="#ffd590" stop-opacity=".3"/><stop offset="1" stop-color="#ffd48c" stop-opacity="0"/></radialGradient>
 <radialGradient id="ef-strip-spill" cx=".5" cy=".5" r=".5"><stop offset="0" style="stop-color:var(--ef-b1-color,#4dbd80)" stop-opacity=".55"/><stop offset="1" style="stop-color:var(--ef-b1-color,#4dbd80)" stop-opacity="0"/></radialGradient>
 <filter id="ef-reflection-soft" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="9 26"/></filter>
 <filter id="ef-reflection-blur" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="6 11"/></filter>
@@ -3161,7 +3175,7 @@
 
 <!-- light mode: the lit window's warmth and battery 1's level strip glowing on the glossy ground -->
 <g class="ef-light-only">
-  <ellipse id="ef-window-spill" cx="846" cy="948" rx="95" ry="24" transform="rotate(-14 846 948)" fill="url(#ef-window-spill)"/>
+  <ellipse id="ef-window-spill" cx="846" cy="960" rx="88" ry="42" transform="rotate(-14 846 960)" fill="url(#ef-window-spill)"/>
   <ellipse id="ef-b1-spill" cx="344" cy="1078" rx="24" ry="34" fill="url(#ef-strip-spill)"/>
 </g>
 <!-- weather in front of the house -->

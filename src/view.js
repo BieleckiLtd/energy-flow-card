@@ -1882,7 +1882,10 @@ export class EnergyFlowView {
     if (label.closest("#ef-grid-label") && has("ef-no-b1")) box.x -= 135;
     box.x += label.shift || 0;  // centred on its leader (alignLabels)
     const luminance = this.lightBehind(context, scale, box);
-    if (luminance !== null) this.ink(label, luminance);
+    if (luminance === null) return;
+    // In light mode a label gets its glow only where much of it sits over something very dark (the panels).
+    if (this.svg.classList.contains("ef-light")) this.ink(label, luminance, this.darkShare(context, scale, box));
+    else this.ink(label, luminance);
   }
 
   // The mean luminance of the sampled background under a box in the picture's units, or null outside it.
@@ -1899,11 +1902,28 @@ export class EnergyFlowView {
     return light * 4 / pixels.length;
   }
 
+  // The share of the sampled background under a box that is very dark (the panels, a dark roof), or 0 outside it.
+  darkShare(context, scale, { x, y, width, height }) {
+    const left = Math.max(0, Math.floor(x * scale)), top = Math.max(0, Math.floor(y * scale));
+    const right = Math.min(context.canvas.width, Math.ceil((x + width) * scale));
+    const bottom = Math.min(context.canvas.height, Math.ceil((y + height) * scale));
+    if (right <= left || bottom <= top) return 0;
+    const pixels = context.getImageData(left, top, right - left, bottom - top).data;
+    let dark = 0;
+    for (let i = 0; i < pixels.length; i += 4) {
+      const l = .2126 * linearLight(pixels[i]) + .7152 * linearLight(pixels[i + 1]) + .0722 * linearLight(pixels[i + 2]);
+      if (l < .03) dark++;
+    }
+    return dark * 4 / pixels.length;
+  }
+
   // White ink over a dark background, brighter over a lighter one, and a dark halo over a bright one. In light mode
   // the ink stays dark, day and night, with a white glow over a dark patch (ef-ink-bright).
-  ink(label, luminance) {
+  ink(label, luminance, share) {
     if (this.svg.classList.contains("ef-light")) {
-      const dark = luminance < (label.classList.contains("ef-ink-bright") ? .45 : .4);
+      const on = label.classList.contains("ef-ink-bright");
+      // labels: by how much of them is over something very dark; home's list (no share): by its mean light
+      const dark = share === undefined ? luminance < (on ? .07 : .05) : share > (on ? .2 : .28);
       label.classList.remove("ef-ink-lifted");
       label.classList.toggle("ef-ink-bright", dark);
       return;
