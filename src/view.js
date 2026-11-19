@@ -265,7 +265,7 @@ class HeatShimmer {
   }
 
   running() {
-    return this.shown && !this.svg.classList.contains("ef-paused") && !matchMedia(REDUCED_MOTION).matches;
+    return this.shown && this.view.pulsesRun();
   }
 
   // Lines the canvas up with the picture's drawing area inside the svg box.
@@ -980,7 +980,8 @@ export class EnergyFlowView {
     removeEventListener(EFFECTS_KEY, this.onEffects);
     this.motion.removeEventListener?.("change", this.onMotion);
     this.watch.stop();
-    this.svg.classList.add("ef-paused");
+    this.paused = true;
+    this.syncAnimations();
     this.shimmer?.sync();
     this.pulses?.sync();
   }
@@ -1015,7 +1016,29 @@ export class EnergyFlowView {
 
   // Whether anything in the picture may move now.
   pulsesRun() {
-    return !this.svg.classList.contains("ef-paused") && !matchMedia(REDUCED_MOTION).matches;
+    return !this.paused && !matchMedia(REDUCED_MOTION).matches;
+  }
+
+  // Pauses or resumes the picture's own CSS animations through the Web Animations API. A class on the svg with a
+  // rule for every element did this before, and toggling it restyled the whole picture (30-60 ms on a fast PC, far
+  // more on a tablet) each time the card scrolled in or out of view (issue #3). force: also animations started since.
+  syncAnimations(force = false) {
+    const run = this.pulsesRun();
+    if ((!force && run === this.animationsRun) || !this.svg.getAnimations) return;
+    this.animationsRun = run;
+    // Only the ones it paused are played again (play() would start a finished one over), and without a look at
+    // playState: reading it settles the styles again for each animation in turn (30 ms).
+    if (run) {
+      for (const a of this.held || []) a.play();
+      this.held = null;
+      return;
+    }
+    this.held ??= new Set();
+    for (const a of this.svg.getAnimations({ subtree: true })) {
+      if (!a.animationName || this.held.has(a)) continue;  // CSS animations only: transitions finish as they would
+      a.pause();
+      this.held.add(a);
+    }
   }
 
   part(id) { return this.svg.getElementById(id); }
@@ -1611,6 +1634,7 @@ export class EnergyFlowView {
       this.svg.classList.remove("ef-still");
     }
     this.scheduleLabelContrast();
+    if (!this.pulsesRun()) this.syncAnimations(true);  // ones the readings started while it rests
   }
 
   // Home's other loads (pool, A/C...), listed above its label: [{ name, power (W), entity }]. A load drawing less than
@@ -1710,7 +1734,8 @@ export class EnergyFlowView {
   }
 
   restWhenUnseen() {
-    this.svg.classList.toggle("ef-paused", !this.seen || document.hidden);
+    this.paused = !this.seen || document.hidden || !!this.suspended;
+    this.syncAnimations();
     this.shimmer?.sync();
     this.pulses?.sync();
     this.watchFrames();
@@ -1719,7 +1744,7 @@ export class EnergyFlowView {
   }
 
   canSampleContrast() {
-    return this.svg.isConnected && this.seen && !document.hidden && !this.svg.classList.contains("ef-paused");
+    return this.svg.isConnected && this.seen && !document.hidden && !this.paused;
   }
 
   // Labels stay readable on any sky: each one's background is sampled, and over a bright patch it gets a dark halo.
