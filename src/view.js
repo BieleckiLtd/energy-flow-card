@@ -145,8 +145,8 @@ function colorVars(cfg) {
   set("look", "roof", (c) => (light ? {
     "--ef-roof-1": c, "--ef-roof-2": mix(c, "#000000", .14), "--ef-roof-3": mix(c, "#000000", .2),
     "--ef-roof-back-1": mix(c, "#ffffff", .03), "--ef-roof-back-2": mix(c, "#000000", .05),
-    "--ef-roof-edge": mix(c, "#000000", .24), "--ef-roof-line": mix(c, "#000000", .36), "--ef-fascia": mix(c, "#000000", .3),
-    "--ef-roof-ridge": mix(c, "#ffffff", .12),
+    "--ef-roof-edge": mix(c, "#ffffff", .15), "--ef-roof-line": mix(c, "#000000", .12), "--ef-fascia": mix(c, "#ffffff", .18),
+    "--ef-roof-ridge": mix(c, "#ffffff", .28),
   } : {
     "--ef-roof-1": c, "--ef-roof-2": mix(c, "#000000", .14), "--ef-roof-3": mix(c, "#000000", .2),
     "--ef-roof-back-1": mix(c, "#ffffff", .03), "--ef-roof-back-2": mix(c, "#000000", .05),
@@ -1900,10 +1900,10 @@ export class EnergyFlowView {
   }
 
   // White ink over a dark background, brighter over a lighter one, and a dark halo over a bright one. In light mode
-  // the ink is dark, and white (ef-ink-bright) only over a dark patch, such as the night sky.
+  // the ink stays dark, with a white glow over a dark patch (ef-ink-bright); at night that ink is white (see the svg).
   ink(label, luminance) {
     if (this.svg.classList.contains("ef-light")) {
-      const dark = luminance < (label.classList.contains("ef-ink-bright") ? .2 : .17);
+      const dark = luminance < (label.classList.contains("ef-ink-bright") ? .45 : .4);
       label.classList.remove("ef-ink-lifted");
       label.classList.toggle("ef-ink-bright", dark);
       return;
