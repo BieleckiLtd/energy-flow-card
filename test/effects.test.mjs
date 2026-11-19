@@ -38,3 +38,13 @@ test("the Reduce Motion switch is named for each system", () => {
     "Settings → Accessibility → Visual effects → Animation effects");
   assert.equal(motionSettingsPath("Mozilla/5.0 (X11; Linux x86_64)", "Linux x86_64", 0), "");
 });
+
+test("light mode swaps only the colours left at their defaults", async () => {
+  const { themed, DEFAULTS, LIGHT } = await import("../src/view.js");
+  const cfg = (light, grid = DEFAULTS.grid.color, background = DEFAULTS.look.background) => ({ light, grid: { color: grid }, look: { background } });
+  assert.equal(themed(cfg(false), "grid", "color"), DEFAULTS.grid.color);
+  assert.equal(themed(cfg(true), "grid", "color"), LIGHT.grid.color);
+  assert.equal(themed(cfg(true), "look", "background"), LIGHT.look.background);
+  assert.equal(themed(cfg(true, "#ff0000"), "grid", "color"), "#ff0000");
+  assert.equal(themed(cfg(true, undefined, "#123456"), "look", "background"), "#123456");
+});

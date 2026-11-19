@@ -73,6 +73,14 @@ export const DEFAULTS = {
   battery2: { show: true, name: "Battery 2", color: "#4aa5f2", face: "#4b4e54" },
   look: { glass: "#2d334d", roof: "#333333", wall: "#0a0a0a", window: "#d6d3ca", background: "#17181a" },
 };
+// Light mode: what replaces a default colour the owner left as it is. The house's own light colours are in the
+// svg's .ef-light rule; these are the ones the card itself sets.
+export const LIGHT = { grid: { color: "#8a9097" }, look: { background: "#e8e9eb" } };
+// The colour a part is drawn in: the owner's, or in light mode the light one where theirs is the default.
+export function themed(cfg, part, key) {
+  const value = cfg[part]?.[key];
+  return cfg.light && LIGHT[part]?.[key] && (!value || value.toLowerCase() === DEFAULTS[part][key]) ? LIGHT[part][key] : value;
+}
 
 const missing = (v) => v === null || v === undefined || Number.isNaN(v);
 const flow = (v) => (missing(v) || Math.abs(v) < FLOW_MIN ? 0 : v);
@@ -102,9 +110,12 @@ function mix(hex, other, t) {
   return "#" + a.map((v, i) => Math.round(v + (b[i] - v) * t).toString(16).padStart(2, "0")).join("");
 }
 export const validColor = (hex) => !!rgb(hex);
+// A light wall dimmed as the sky darkens (see .ef-light in the svg), where the browser has color-mix.
+const DUSK = typeof CSS !== "undefined" && CSS.supports?.("color", "color-mix(in srgb, red, blue 10%)");
+const dusk = (c) => (DUSK ? `color-mix(in srgb, ${c}, #2a2e35 calc(var(--ef-darkness, 0) * 42%))` : c);
 
 // Every colour the picture takes from the config, as the SVG's custom properties. Only colours that differ from
-// the drawing's own are set, so an untouched card looks exactly as drawn.
+// the drawing's own are set, so an untouched card looks exactly as drawn (in light mode, as the .ef-light rule has it).
 function colorVars(cfg) {
   const vars = {};
   const set = (part, key, fn) => {
@@ -113,6 +124,7 @@ function colorVars(cfg) {
   };
   set("solar", "color", (c) => ({ "--ef-solar-color": c }));
   set("grid", "color", (c) => ({ "--ef-grid-color": c }));
+  const light = !!cfg.light;
   set("ev", "color", (c) => ({ "--ef-ev-color": c, "--ef-ev-dir": mix(c, "#ffffff", .25) }));
   for (const n of [1, 2]) {
     set(`battery${n}`, "color", (c) => ({
@@ -125,8 +137,17 @@ function colorVars(cfg) {
   }
   set("look", "glass", (c) => ({ "--ef-glass-1": c, "--ef-glass-2": mix(c, "#000000", .27), "--ef-glass-3": mix(c, "#000000", .52) }));
   set("look", "window", (c) => ({ "--ef-window-1": c, "--ef-window-2": mix(c, "#000000", .19), "--ef-window-mirror": mix(c, "#000000", .04) }));
-  set("look", "wall", (c) => ({ "--ef-wall-1": c, "--ef-wall-2": mix(c, "#ffffff", .02) }));
-  set("look", "roof", (c) => ({
+  // In light mode the side walls are the wall's colour in shade, dimming after dark; dark, they take the roof's (as drawn).
+  set("look", "wall", (c) => (light ? {
+    "--ef-wall-1": dusk(c), "--ef-wall-2": dusk(mix(c, "#000000", .03)), "--ef-gable-1": dusk(mix(c, "#000000", .1)),
+    "--ef-gable-2": dusk(mix(c, "#000000", .15)), "--ef-garage-wall": dusk(mix(c, "#000000", .11)), "--ef-jamb": dusk(mix(c, "#000000", .21)),
+  } : { "--ef-wall-1": c, "--ef-wall-2": mix(c, "#ffffff", .02) }));
+  set("look", "roof", (c) => (light ? {
+    "--ef-roof-1": c, "--ef-roof-2": mix(c, "#000000", .14), "--ef-roof-3": mix(c, "#000000", .2),
+    "--ef-roof-back-1": mix(c, "#ffffff", .03), "--ef-roof-back-2": mix(c, "#000000", .05),
+    "--ef-roof-edge": mix(c, "#000000", .24), "--ef-roof-line": mix(c, "#000000", .36), "--ef-fascia": mix(c, "#000000", .3),
+    "--ef-roof-ridge": mix(c, "#ffffff", .12),
+  } : {
     "--ef-roof-1": c, "--ef-roof-2": mix(c, "#000000", .14), "--ef-roof-3": mix(c, "#000000", .2),
     "--ef-roof-back-1": mix(c, "#ffffff", .03), "--ef-roof-back-2": mix(c, "#000000", .05),
     "--ef-gable-1": mix(c, "#000000", .25), "--ef-gable-2": mix(c, "#000000", .45),
@@ -1122,6 +1143,7 @@ export class EnergyFlowView {
     svg.classList.toggle("ef-no-solar", !cfg.solar.show);
     svg.classList.toggle("ef-no-b1", !cfg.battery1.show);
     svg.classList.toggle("ef-no-b2", !cfg.battery2.show);
+    svg.classList.toggle("ef-light", !!cfg.light);  // changes seldom: restyling the whole picture once is fine
     this.placeLabels(cfg.battery1.show && cfg.battery2.show);
     const name = (id, value) => this.text(id, String(value ?? "").toUpperCase(), null);
     name("ef-solar-name", cfg.solar.name);
@@ -1135,7 +1157,7 @@ export class EnergyFlowView {
     for (const [key, value] of Object.entries(vars)) svg.style.setProperty(key, value);
     this.colorKeys = Object.keys(vars);
     this.colors = {
-      solar: cfg.solar.color, grid: cfg.grid.color, b1: cfg.battery1.color, b2: cfg.battery2.color, ev: cfg.ev.color,
+      solar: cfg.solar.color, grid: themed(cfg, "grid", "color"), b1: cfg.battery1.color, b2: cfg.battery2.color, ev: cfg.ev.color,
     };
     this.alignLabels();  // names change the widths
     this.applyEffects();
@@ -1877,8 +1899,15 @@ export class EnergyFlowView {
     return light * 4 / pixels.length;
   }
 
-  // White ink over a dark background, brighter over a lighter one, and a dark halo over a bright one.
+  // White ink over a dark background, brighter over a lighter one, and a dark halo over a bright one. In light mode
+  // the ink is dark, and white (ef-ink-bright) only over a dark patch, such as the night sky.
   ink(label, luminance) {
+    if (this.svg.classList.contains("ef-light")) {
+      const dark = luminance < (label.classList.contains("ef-ink-bright") ? .2 : .17);
+      label.classList.remove("ef-ink-lifted");
+      label.classList.toggle("ef-ink-bright", dark);
+      return;
+    }
     const threshold = label.classList.contains("ef-ink-lifted") ? .165 : .18;
     const lifted = luminance > threshold;
     label.classList.toggle("ef-ink-lifted", lifted);

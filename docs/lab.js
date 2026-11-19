@@ -37,14 +37,14 @@
 
   const state = {
     place: "london", latitude: 51.5072, longitude: -0.1276, zone: "Europe/London",
-    date: today(), minute: 720, weather: "clear", temperature: 15, effects: "auto",
+    date: today(), minute: 720, weather: "clear", temperature: 15, effects: "auto", theme: "auto",
     power: { solar: 2.2, b1: 0, b2: 0, grid: 0, home: 2.2, b1soc: 64, b2soc: 48, ev: 1.5, evsoc: 62 }, derive: "grid",
     config: clone(DEFAULT_CONFIG),
   };
   try {
     const saved = JSON.parse(localStorage.getItem(STORE) || "null");
     if (saved) {
-      for (const k of ["place", "latitude", "longitude", "zone", "weather", "temperature", "derive", "effects"]) if (k in saved) state[k] = saved[k];
+      for (const k of ["place", "latitude", "longitude", "zone", "weather", "temperature", "derive", "effects", "theme"]) if (k in saved) state[k] = saved[k];
       if (state.derive !== "home") state.derive = "grid";
       Object.assign(state.power, saved.power || {});
       const fit = (k, lo, hi) => { state.power[k] = Math.min(hi, Math.max(lo, +state.power[k] || 0)); };
@@ -58,8 +58,8 @@
   } catch { /* a private window: start fresh */ }
   const save = () => {
     try {
-      const { place, latitude, longitude, zone, weather, temperature, derive, power, config, effects } = state;
-      localStorage.setItem(STORE, JSON.stringify({ place, latitude, longitude, zone, weather, temperature, derive, power, config, effects }));
+      const { place, latitude, longitude, zone, weather, temperature, derive, power, config, effects, theme } = state;
+      localStorage.setItem(STORE, JSON.stringify({ place, latitude, longitude, zone, weather, temperature, derive, power, config, effects, theme }));
     } catch { /* not kept, still works */ }
   };
 
@@ -111,7 +111,7 @@
     grid: state.config.grid.name, ev: state.config.ev.name });
 
   function cardConfig() {
-    return { preview: true, ...clone(state.config), effects: state.effects };
+    return { preview: true, ...clone(state.config), effects: state.effects, theme: state.theme };
   }
 
   // The readings always add up, as in a real house: what comes in (solar, batteries giving out, the car giving out,
@@ -158,6 +158,7 @@
     });
     for (const b of $("weather").children) b.setAttribute("aria-pressed", b.dataset.key === state.weather);
     for (const b of $("effects").children) b.setAttribute("aria-pressed", b.dataset.key === state.effects);
+    for (const b of $("theme").children) b.setAttribute("aria-pressed", b.dataset.key === state.theme);
     $("temperature").value = state.temperature;
     $("temperature-out").textContent = `${state.temperature} °C`;
     syncPower();
@@ -236,6 +237,14 @@
     b.dataset.key = key;
     b.onclick = () => { state.effects = key; card.setConfig(cardConfig()); render(); };
     $("effects").append(b);
+  }
+  for (const [key, label] of [["auto", "Auto"], ["dark", "Dark"], ["light", "Light"]]) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = label;
+    b.dataset.key = key;
+    b.onclick = () => { state.theme = key; card.setConfig(cardConfig()); render(); };
+    $("theme").append(b);
   }
   $("temperature").addEventListener("input", () => { state.temperature = +$("temperature").value; render(); });
 
@@ -546,6 +555,7 @@
     const c = state.config, d = DEFAULT_CONFIG;
     const lines = ["type: custom:energy-flow-card", "weather: weather.forecast_home"];
     if (state.effects !== "auto") lines.push(`effects: ${state.effects}`);
+    if (state.theme !== "auto") lines.push(`theme: ${state.theme}`);
     const block = (key, entities) => {
       const out = [`${key}:`, ...entities.map(([k, v]) => `  ${k}: ${v}`)];
       for (const prop of ["name", "color", "face"]) {

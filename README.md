@@ -49,6 +49,7 @@ battery2:
 # battery2: false                      # only one battery (either can go): its label and the grid's are then centred
 # garage: on                           # shutter rolled up (or a cover entity): the car and its wall charger
 # lights: light.living_room             # house lights: on, off or an entity; tap the window to toggle
+# theme: light                        # auto (follows Home Assistant), light or dark
 # ev: sensor.ev_charger_power          # the car's power, + charging, − giving power out
 ```
 
@@ -72,6 +73,7 @@ battery2:
 | `latitude`, `longitude` | card | Sky location, if not Home Assistant's own |
 | `title` | card | Optional heading |
 | `effects` | card | Level of detail: `auto` (default), `high`, `medium` or `low`. With `auto`, where the animation stays choppy the card asks which level to use and keeps the answer on that device |
+| `theme` | card | `auto` (default) follows Home Assistant's light or dark mode; `light` or `dark` keeps one. Light mode has a pale sky and ground, light walls under a grey roof and dark labels; colours you set yourself are kept |
 | `look` | card | `glass`, `roof`, `wall`, `window`, `background` colours |
 
 Tap a label to open that sensor's details.

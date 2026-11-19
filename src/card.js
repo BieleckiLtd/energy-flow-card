@@ -1,7 +1,7 @@
 // The Home Assistant card: <energy-flow-card>, a Lovelace custom card. It reads power sensors, a weather entity
 // and Home Assistant's location, and draws them with EnergyFlowView. The lab page drives the same element
 // through preview(), without Home Assistant.
-import { EnergyFlowView, DEFAULTS, WEATHERS, effectsLevel, validColor, christmasSeason } from "./view.js";
+import { EnergyFlowView, DEFAULTS, WEATHERS, effectsLevel, validColor, christmasSeason, themed } from "./view.js";
 import { energySky } from "./sky.js";
 import { SVG, VERSION } from "./svg.js";
 
@@ -23,6 +23,8 @@ const OPEN = ["open", "on"], ON = ["on", "open"];
 export function normalizeConfig(config = {}) {
   const out = { title: config.title || "", weather: config.weather || "", temperature: config.temperature || "", latitude: config.latitude, longitude: config.longitude,
     festive: (config.festive ?? config.christmas) !== false, effects: effectsLevel(config.effects),
+    // light or dark, or auto: Home Assistant's own dark mode (outside it, the device's)
+    theme: ["light", "dark"].includes(config.theme) ? config.theme : "auto",
     // The garage and the house lights: on or off, or an entity (a cover, switch or light) that says which and that a
     // tap on the shutter or the window toggles. Without one a tap toggles the picture alone.
     garage: [true, 1, "1", "open", "on"].includes(config.garage) ? "open" : "closed",
@@ -68,6 +70,7 @@ export class EnergyFlowCard extends HTMLElement {
         ha-card, .card { overflow: hidden; background: var(--efc-background, #17181a); border-radius: var(--ha-card-border-radius, 12px); }
         .card { display: block; }
         .title { margin: 0; padding: 14px 16px 0; font: 500 16px/1.3 var(--paper-font-body1_-_font-family, system-ui, sans-serif); color: #f1f1f1; }
+        .light .title { color: #1d1e20; }
         /* Not an icon: back to SVG's own defaults, whatever the page around it inherits. */
         .picture svg { display: block; width: 100%; height: auto; fill: #000; stroke: none; stroke-width: 1; stroke-linecap: butt; stroke-linejoin: miter; letter-spacing: normal; }
       </style>
@@ -80,6 +83,9 @@ export class EnergyFlowCard extends HTMLElement {
     this.view.part("ef-tap-window").addEventListener("click", () => this.tapWindow());
     this.local = {};
     this.config = normalizeConfig({});
+    // auto outside Home Assistant (the lab): the device's light or dark setting
+    this.scheme = window.matchMedia?.("(prefers-color-scheme: light)");
+    this.scheme?.addEventListener?.("change", () => { if (this.applyTheme()) this.render(); });
   }
 
   // Home Assistant wraps cards in <ha-card> for the theme's shadow and radius; outside it we keep our own box.
@@ -87,7 +93,7 @@ export class EnergyFlowCard extends HTMLElement {
     const card = this.shadowRoot.querySelector(".card");
     if (customElements.get("ha-card") && card.tagName !== "HA-CARD") {
       const haCard = document.createElement("ha-card");
-      haCard.className = "card";
+      haCard.className = card.className;  // "card", and "light" in light mode
       haCard.append(...card.childNodes);
       card.replaceWith(haCard);
     }
@@ -120,9 +126,8 @@ export class EnergyFlowCard extends HTMLElement {
     this.local = {};  // taps without an entity last until the config changes
     this.titleEl.textContent = this.config.title;
     this.titleEl.hidden = !this.config.title;
-    this.picture.style.background = this.config.look.background;
-    this.shadowRoot.host.style.setProperty("--efc-background", this.config.look.background);
-    this.view.configure(this.config);
+    this.light = null;
+    this.applyTheme();
     for (const [id, part] of [["ef-solar-label", "solar"], ["ef-home-name", "home"], ["ef-home", "home"],
       ["ef-grid-name", "grid"], ["ef-grid", "grid"], ["ef-ev-label", "ev"], ["ef-b1-label", "battery1"], ["ef-b2-label", "battery2"]]) {
       this.view.part(id).classList.toggle("ef-clickable", !!this.entityOf(part));
@@ -137,6 +142,7 @@ export class EnergyFlowCard extends HTMLElement {
     const old = this._hass;
     this._hass = hass;
     if (!this.clock && this.isConnected) this.startClock();
+    if (this.applyTheme()) { this.render(); return; }
     if (old && old.config === hass.config && this.watched().every((e) => old.states[e] === hass.states[e])) return;
     this.render();
   }
@@ -156,6 +162,21 @@ export class EnergyFlowCard extends HTMLElement {
   }
 
   get hass() { return this._hass; }
+
+  // Light or dark, from the config or (auto) Home Assistant's dark mode. The picture is configured again only when it
+  // changes; true when it did.
+  applyTheme() {
+    const theme = this.config.theme, dark = this._hass?.themes?.darkMode;
+    const light = theme === "auto" ? (typeof dark === "boolean" ? !dark : !!this.scheme?.matches) : theme === "light";
+    if (light === this.light) return false;
+    this.light = light;
+    const cfg = { ...this.config, light }, background = themed(cfg, "look", "background");
+    this.picture.style.background = background;
+    this.shadowRoot.host.style.setProperty("--efc-background", background);
+    this.shadowRoot.querySelector(".card").classList.toggle("light", light);
+    this.view.configure(cfg);
+    return true;
+  }
 
   // The sky moves on even when no sensor changes.
   startClock() {
@@ -313,6 +334,8 @@ export class EnergyFlowCard extends HTMLElement {
         { name: "effects", selector: { select: { mode: "dropdown", options: [
           { value: "auto", label: "Auto: asks on devices that struggle" }, { value: "high", label: "High" },
           { value: "medium", label: "Medium" }, { value: "low", label: "Low" }] } } },
+        { name: "theme", selector: { select: { mode: "dropdown", options: [
+          { value: "auto", label: "Auto: follows Home Assistant" }, { value: "dark", label: "Dark" }, { value: "light", label: "Light" }] } } },
         { type: "expandable", name: "solar", title: "Solar", schema: [
           { name: "entity", selector: power }, { name: "name", selector: text }, color("color"),
           { name: "show", selector: { boolean: {} } }] },
@@ -361,7 +384,7 @@ export class EnergyFlowCard extends HTMLElement {
 }
 
 const LABELS = {
-  title: "Title", weather: "Weather entity", temperature: "Outdoor temperature sensor (optional)", garage: "Garage (or a cover, switch or light entity; tap the shutter to toggle)", lights: "House lights (or a light or switch entity; tap the window to toggle)", effects: "Detail", entity: "Power sensor", import: "Import sensor (instead of one signed sensor)",
+  title: "Title", weather: "Weather entity", temperature: "Outdoor temperature sensor (optional)", garage: "Garage (or a cover, switch or light entity; tap the shutter to toggle)", lights: "House lights (or a light or switch entity; tap the window to toggle)", effects: "Detail", theme: "Theme", entity: "Power sensor", import: "Import sensor (instead of one signed sensor)",
   export: "Export sensor", invert: "Flip the sign", name: "Name", color: "Flow colour (#rrggbb)", show: "Show in picture",
   power: "Power sensor", soc: "Charge (%) sensor", discharge: "Discharge sensor (instead of one signed sensor)",
   charge: "Charge sensor", face: "Glass cover colour (#rrggbb, any colour)", glass: "Solar glass", roof: "Roof", wall: "Wall",
