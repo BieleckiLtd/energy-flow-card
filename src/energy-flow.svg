@@ -260,7 +260,7 @@
 .ef-frosty .ef-frost{opacity:calc(var(--ef-frost,1) * (.95 - .4 * var(--ef-darkness,0)))}
 /* Light mode (theme: light, or Home Assistant's light theme): a bright sky, white walls under a light grey roof,
    pale ground with soft shadows, dark labels. The card sets .ef-light on the root; the owner's own colours win. */
-.ef-light{--ef-wall-1:#f4f4f3;--ef-wall-2:#eeeeed;--ef-gable-1:#e2e4e7;--ef-gable-2:#d9dbdf;--ef-garage-wall:#e4e6e9;--ef-jamb:#c9cbcf;--ef-door:#eceef0;--ef-door-line:#cdd0d4;
+.ef-light{--ef-wall-1:#f4f4f3;--ef-wall-2:#eeeeed;--ef-gable-1:#eaecef;--ef-gable-2:#e1e3e7;--ef-garage-wall:#e4e6e9;--ef-jamb:#dadce1;--ef-door:#eceef0;--ef-door-line:#cdd0d4;
   --ef-roof-1:#8f9297;--ef-roof-2:#85888d;--ef-roof-3:#7f8287;--ef-roof-back-1:#94979c;--ef-roof-back-2:#8a8d92;
   --ef-roof-edge:#a4a7ab;--ef-roof-line:#7c7f84;--ef-fascia:#a8abaf;--ef-roof-ridge:#b8bbbf;
   --ef-glass-1:#2f3b6a;--ef-glass-2:#243058;--ef-glass-3:#1b2445;--ef-grid-color:#8a9097}
@@ -354,7 +354,7 @@
 @supports (color:color-mix(in srgb,red,blue 10%)){
 .ef-light{--ef-moonlit:calc(var(--ef-darkness,0) * var(--ef-n-wall-p));--ef-moonroof:calc(var(--ef-darkness,0) * var(--ef-n-roof-p));
   --ef-moondoor:calc(var(--ef-darkness,0) * var(--ef-n-door-p));--ef-moonsky:calc(var(--ef-darkness,0) * var(--ef-n-sky-p));
-  --ef-wall-1:color-mix(in srgb,#f4f4f3,var(--ef-n-wall) var(--ef-moonlit));--ef-wall-2:color-mix(in srgb,#eeeeed,var(--ef-n-wall) var(--ef-moonlit));--ef-gable-1:color-mix(in srgb,#e2e4e7,var(--ef-n-wall) var(--ef-moonlit));--ef-gable-2:color-mix(in srgb,#d9dbdf,var(--ef-n-wall) var(--ef-moonlit));--ef-garage-wall:color-mix(in srgb,#e4e6e9,var(--ef-n-wall) var(--ef-moonlit));--ef-jamb:color-mix(in srgb,#c9cbcf,var(--ef-n-wall) var(--ef-moonlit));
+  --ef-wall-1:color-mix(in srgb,#f4f4f3,var(--ef-n-wall) var(--ef-moonlit));--ef-wall-2:color-mix(in srgb,#eeeeed,var(--ef-n-wall) var(--ef-moonlit));--ef-gable-1:color-mix(in srgb,#eaecef,var(--ef-n-wall) var(--ef-moonlit));--ef-gable-2:color-mix(in srgb,#e1e3e7,var(--ef-n-wall) var(--ef-moonlit));--ef-garage-wall:color-mix(in srgb,#e4e6e9,var(--ef-n-wall) var(--ef-moonlit));--ef-jamb:color-mix(in srgb,#dadce1,var(--ef-n-wall) var(--ef-moonlit));
   --ef-door:color-mix(in srgb,#eceef0,var(--ef-n-door) var(--ef-moondoor));--ef-door-line:color-mix(in srgb,#cdd0d4,var(--ef-n-door) var(--ef-moondoor));
   --ef-roof-1:color-mix(in srgb,#8f9297,var(--ef-n-roof) var(--ef-moonroof));--ef-roof-2:color-mix(in srgb,#85888d,var(--ef-n-roof) var(--ef-moonroof));--ef-roof-3:color-mix(in srgb,#7f8287,var(--ef-n-roof) var(--ef-moonroof));--ef-roof-back-1:color-mix(in srgb,#94979c,var(--ef-n-roof) var(--ef-moonroof));--ef-roof-back-2:color-mix(in srgb,#8a8d92,var(--ef-n-roof) var(--ef-moonroof));--ef-roof-edge:color-mix(in srgb,#a4a7ab,var(--ef-n-roof) var(--ef-moonroof));--ef-roof-line:color-mix(in srgb,#7c7f84,var(--ef-n-roof) var(--ef-moonroof));--ef-fascia:color-mix(in srgb,#a8abaf,var(--ef-n-roof) var(--ef-moonroof));--ef-roof-ridge:color-mix(in srgb,#b8bbbf,var(--ef-n-roof) var(--ef-moonroof))}
 .ef-light #ef-sky stop:nth-child(1){stop-color:color-mix(in srgb,#c9d0d8,var(--ef-n-sky) var(--ef-moonsky))}
@@ -749,7 +749,8 @@
 <path d="M0 701.3 244 788 244 1055 0 968.3Z" style="fill:var(--ef-garage-wall,#191919)"/>
 <g id="ef-garage-door">
 <polygon points="0,714 235,797.5 235,1047.5 0,964" style="fill:var(--ef-door,#2b2b2b)"/>
-<path d="M0 725.9L235 809.4M0 737.8L235 821.3M0 749.7L235 833.2M0 761.6L235 845.1M0 773.5L235 857M0 785.4L235 868.9M0 797.3L235 880.8M0 809.2L235 892.7M0 821.1L235 904.6M0 833L235 916.5M0 844.9L235 928.4M0 856.8L235 940.3M0 868.7L235 952.2M0 880.6L235 964.1M0 892.5L235 976M0 904.4L235 987.9M0 916.3L235 999.8M0 928.2L235 1011.7M0 940.1L235 1023.6M0 952L235 1035.5" style="stroke:var(--ef-door-line,#1e1e1e)" stroke-width="1.3" fill="none"/>
+<path id="ef-door-slats" d="M0 725.9L235 809.4M0 737.8L235 821.3M0 749.7L235 833.2M0 761.6L235 845.1M0 773.5L235 857M0 785.4L235 868.9M0 797.3L235 880.8M0 809.2L235 892.7M0 821.1L235 904.6M0 833L235 916.5M0 844.9L235 928.4M0 856.8L235 940.3M0 868.7L235 952.2M0 880.6L235 964.1M0 892.5L235 976M0 904.4L235 987.9M0 916.3L235 999.8M0 928.2L235 1011.7M0 940.1L235 1023.6M0 952L235 1035.5" style="stroke:var(--ef-door-line,#1e1e1e)" stroke-width="1.3" fill="none"/>
+<use class="ef-light-only" href="#ef-door-slats" transform="translate(0 1.7)" style="--ef-door-line:rgb(255 255 255/.2)"/>
 <!-- its bottom bar: the one part that still shows under the lintel when the shutter is up -->
 <g transform="matrix(1 .35532 0 1 0 714)">
   <rect x="0" y="238" width="235" height="6" fill="url(#ef-garage-slat)"/>
@@ -1293,13 +1294,23 @@
 <!-- the shutter as it rolls up or down: the door again, over the open garage, sliding within the doorway -->
 <g id="ef-shutter" clip-path="url(#ef-garage-opening)"><g id="ef-shutter-slide"><use href="#ef-garage-door"/></g></g>
 <path d="M235 797.5 244 788 244 1055 235 1047.5Z" style="fill:var(--ef-jamb,#0f0f0f)"/>
+<!-- light mode: the doorway's shading. The lintel shades the top of the shutter, the jamb casts a thin shadow on its
+     right, a light frame runs round the opening and a sill along its foot. -->
+<g class="ef-light-only">
+  <path d="M0 714 235 797.5 235 857.5 0 774Z" fill="url(#ef-lintel-shade)"/>
+  <path d="M226 794.3 235 797.5 235 1047.5 226 1044.3Z" fill="#151926" fill-opacity=".22"/>
+  <path d="M0 711.5 236.5 795.5 236.5 1049" fill="none" stroke="#e3e6ec" stroke-opacity=".75" stroke-width="3.5"/>
+  <path d="M0 964 235 1047.5" fill="none" stroke="#dfe2e8" stroke-opacity=".85" stroke-width="4"/>
+</g>
 
 <g class="ef-snowcap"><path id="ef-garage-snow" d="M0 714L0 714 6.7 714.9 13.4 715.9 20.1 717.9 26.9 720.1 33.6 722.5 40.3 724.9 47 727.4 53.7 729.9 60.4 732.3 67.1 734.7 73.9 737.1 80.6 739.5 87.3 741.9 94 744.3 100.7 746.7 107.4 749.2 114.1 751.6 120.9 754 127.6 756.5 134.3 759.1 141 761.6 147.7 764 154.4 766.4 161.1 768.7 167.9 771.1 174.6 773.4 181.3 775.7 188 777.8 194.7 779.9 201.4 782 208.1 784.4 214.9 787.1 221.6 790 228.3 793.8 235 797.5L235 797.5Z"/><path d="M0 968L0 968 8.3 970.9 16.6 974.3 24.9 978.8 33.1 983 41.4 986.3 49.7 990 58 993.8 66.3 997.5 74.6 1000.7 82.9 1001.7 91.1 1000.8 99.4 1003.3 107.7 1006.3 116 1009.2 124.3 1012.1 132.6 1015.1 140.9 1019 149.1 1022.4 157.4 1027.4 165.7 1033.4 174 1038.8 182.3 1042.5 190.6 1044.4 198.9 1045.2 207.1 1046 215.4 1047.8 223.7 1050.1 232 1051.2 240.3 1053.3 248.6 1056.3 256.9 1059.2 265.1 1062.2 273.4 1065.8 281.7 1070 290 1071L290 1071Z"/></g>
 <!-- front wall -->
 <path d="M289 806 946 661 947.5 905 290 1071Z" fill="url(#ef-wall)"/>
 <!-- light mode: the eaves' shade on the top of the walls -->
 <g class="ef-light-only"><path d="M289 806 946 661 946.3 721 289.2 866Z" fill="url(#ef-eave-shade)"/>
-<path d="M70 513.5 289 806 289.2 866 70 560 0 610 0 568Z" fill="url(#ef-rake-shade)"/></g>
+<path d="M70 513.5 289 806 289.2 866 70 560 0 610 0 568Z" fill="url(#ef-rake-shade)"/>
+<path d="M289 806 345 793.6 345.5 1056.8 290 1071Z" fill="url(#ef-corner-shade)"/>
+<path d="M289.2 807 290 1070" fill="none" stroke="#fff" stroke-opacity=".4" stroke-width="1.6"/></g>
 <g class="ef-frost"><path d="M289 806 946 661 947.5 905 290 1071Z" fill="url(#ef-frost-front-foot)" filter="url(#ef-frost-ice)"/></g>
 <g class="ef-snowcap"><path d="M290 1071L290 1071 308.8 1071.9 327.6 1066 346.4 1058.8 365.1 1052.2 383.9 1047.8 402.7 1045.5 421.5 1044.5 440.3 1042.9 459.1 1039 477.9 1031.5 496.6 1021.2 515.4 1014.1 534.2 1009.3 553 1004.6 571.8 999.9 590.6 999.5 609.4 998.1 628.1 993.9 646.9 989.5 665.7 985.4 684.5 981.1 703.3 976.5 722.1 972 740.9 968 759.6 964 778.4 959.4 797.2 953.5 816 945.2 834.8 936.3 853.6 928.7 872.4 924 891.1 919.2 909.9 914.5 928.7 909.7 947.5 905L947.5 905Z"/></g>
 
@@ -3146,9 +3157,11 @@
 <linearGradient id="ef-wall-mirror" gradientUnits="userSpaceOnUse" x1="618" y1="988" x2="636" y2="1090"><stop offset="0" style="stop-color:var(--ef-wall-1,#f4f4f3)" stop-opacity=".75"/><stop offset=".5" style="stop-color:var(--ef-wall-1,#f4f4f3)" stop-opacity=".25"/><stop offset="1" style="stop-color:var(--ef-wall-1,#f4f4f3)" stop-opacity="0"/></linearGradient>
 <linearGradient id="ef-door-mirror" gradientUnits="userSpaceOnUse" x1="118" y1="1006" x2="100" y2="1100"><stop offset="0" style="stop-color:var(--ef-door,#eceef0)" stop-opacity=".6"/><stop offset="1" style="stop-color:var(--ef-door,#eceef0)" stop-opacity="0"/></linearGradient>
 <linearGradient id="ef-gable-mirror" gradientUnits="userSpaceOnUse" x1="266" y1="1060" x2="250" y2="1150"><stop offset="0" style="stop-color:var(--ef-gable-2,#d9dbdf)" stop-opacity=".6"/><stop offset="1" style="stop-color:var(--ef-gable-2,#d9dbdf)" stop-opacity="0"/></linearGradient>
+<linearGradient id="ef-lintel-shade" gradientUnits="userSpaceOnUse" x1="112" y1="756" x2="104" y2="800"><stop offset="0" stop-color="#151926" stop-opacity=".45"/><stop offset=".4" stop-color="#151926" stop-opacity=".15"/><stop offset="1" stop-color="#151926" stop-opacity="0"/></linearGradient>
+<linearGradient id="ef-corner-shade" gradientUnits="userSpaceOnUse" x1="290" y1="0" x2="345" y2="0"><stop offset="0" stop-color="#1e2230" stop-opacity=".2"/><stop offset="1" stop-color="#1e2230" stop-opacity="0"/></linearGradient>
 <filter id="ef-ao-blur" x="-10%" y="-60%" width="120%" height="220%"><feGaussianBlur stdDeviation="7"/></filter>
-<linearGradient id="ef-eave-shade" gradientUnits="userSpaceOnUse" x1="620" y1="733" x2="628" y2="790"><stop offset="0" stop-color="#1e2230" stop-opacity=".34"/><stop offset=".45" stop-color="#1e2230" stop-opacity=".12"/><stop offset="1" stop-color="#1e2230" stop-opacity="0"/></linearGradient>
-<linearGradient id="ef-rake-shade" gradientUnits="userSpaceOnUse" x1="180" y1="660" x2="150" y2="700"><stop offset="0" stop-color="#1e2230" stop-opacity=".3"/><stop offset="1" stop-color="#1e2230" stop-opacity="0"/></linearGradient>
+<linearGradient id="ef-eave-shade" gradientUnits="userSpaceOnUse" x1="620" y1="733" x2="628" y2="790"><stop offset="0" stop-color="#1e2230" stop-opacity=".42"/><stop offset=".45" stop-color="#1e2230" stop-opacity=".14"/><stop offset="1" stop-color="#1e2230" stop-opacity="0"/></linearGradient>
+<linearGradient id="ef-rake-shade" gradientUnits="userSpaceOnUse" x1="180" y1="660" x2="150" y2="700"><stop offset="0" stop-color="#1e2230" stop-opacity=".42"/><stop offset=".5" stop-color="#1e2230" stop-opacity=".12"/><stop offset="1" stop-color="#1e2230" stop-opacity="0"/></linearGradient>
 <radialGradient id="ef-window-spill" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#ffd590" stop-opacity=".8"/><stop offset=".5" stop-color="#ffd590" stop-opacity=".3"/><stop offset="1" stop-color="#ffd48c" stop-opacity="0"/></radialGradient>
 <radialGradient id="ef-strip-spill" cx=".5" cy=".5" r=".5"><stop offset="0" style="stop-color:var(--ef-b1-color,#4dbd80)" stop-opacity=".55"/><stop offset="1" style="stop-color:var(--ef-b1-color,#4dbd80)" stop-opacity="0"/></radialGradient>
 <filter id="ef-reflection-soft" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="9 26"/></filter>
