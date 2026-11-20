@@ -1933,8 +1933,13 @@ export class EnergyFlowView {
   ink(label, luminance, share) {
     if (this.svg.classList.contains("ef-light")) {
       const on = label.classList.contains("ef-ink-bright");
-      // labels: by how much of them is over something very dark; home's list (no share): by its mean light
-      const dark = share === undefined ? luminance < (on ? .07 : .05) : share > (on ? .2 : .28);
+      // A glow wherever the dark ink would fall below a 3:1 contrast with its background (the night sky, a grey roof
+      // under an idle value), or much of the label sits over something very dark (the panels). Each ink's luminance
+      // is fixed by its role, not read back, since the glow itself darkens the ink.
+      const ink = label.classList.contains("ef-cap") ? .06 : label.querySelector?.(".ef-idle") || label.classList.contains("ef-idle") ? .11
+        : share === undefined ? .1 : .011;
+      const dim = luminance < (3 * (ink + .05) - .05) * (on ? 1.15 : 1);
+      const dark = dim || share !== undefined && share > (on ? .2 : .28);
       label.classList.remove("ef-ink-lifted");
       label.classList.toggle("ef-ink-bright", dark);
       return;
