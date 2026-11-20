@@ -320,6 +320,8 @@
 .ef-light .ef-extra.ef-ink-bright.ef-extra-edge .ef-extra-name{color:rgb(230 232 235/.3)}
 .ef-light .ef-extra.ef-ink-bright.ef-extra-edge .ef-extra-val{color:rgb(244 244 244/.3)}
 .ef-light .ef-lead{stroke:#3a3d42;stroke-opacity:.5}
+/* the leaders that run down over the panels and the roof are white, day and night */
+.ef-light :is(#ef-solar-lead,#ef-home-lead,#ef-ev-lead){stroke:#fff;stroke-opacity:.82}
 /* light grey pipes */
 .ef-light .ef-lane{stroke:#c4c7cb}
 .ef-light .ef-pipe-shade{stroke-opacity:.1}
@@ -3220,7 +3222,7 @@
 
 <!-- labels -->
 <path class="ef-lead" id="ef-solar-lead" d="M540 244V585"/>
-<path class="ef-lead" d="M844.5 369V722"/>
+<path class="ef-lead" id="ef-home-lead" d="M844.5 369V722"/>
 <path class="ef-lead" id="ef-b1-lead" d="M388 1068V1132"/>
 <path class="ef-lead" id="ef-b2-lead" d="M495 1043.4V1132"/>
 <path class="ef-lead" id="ef-grid-lead" d="M895 1132V1072"/>
