@@ -309,12 +309,12 @@
 .ef-light .ef-idle{fill:#5b5e63}
 .ef-light .ef-ink-bright.ef-cap{fill:#e6e8eb}
 .ef-light .ef-ink-bright.ef-val,.ef-light .ef-ink-bright .ef-idle{fill:#f4f4f4}
-.ef-light #ef-labels .ef-ink-bright{filter:drop-shadow(0 1px 2px rgb(10 14 28/.5)) drop-shadow(0 0 8px rgb(10 14 28/.3))}
+.ef-light #ef-labels .ef-ink-bright{filter:drop-shadow(0 0 6px rgb(10 14 28/.3)) drop-shadow(0 0 16px rgb(10 14 28/.22))}
 .ef-light .ef-extra-name{color:#55595f}
 .ef-light .ef-extra-val{color:#1b1c1e}
 .ef-light .ef-extra.ef-ink-bright .ef-extra-name{color:#e6e8eb}
 .ef-light .ef-extra.ef-ink-bright .ef-extra-val{color:#f4f4f4}
-.ef-light .ef-extra.ef-ink-bright span{text-shadow:0 1px 2px rgb(10 14 28/.45),0 0 7px rgb(10 14 28/.25)}
+.ef-light .ef-extra.ef-ink-bright span{text-shadow:0 0 5px rgb(10 14 28/.3),0 0 12px rgb(10 14 28/.22)}
 .ef-light .ef-extra.ef-extra-edge .ef-extra-name{color:rgb(85 89 95/.3)}
 .ef-light .ef-extra.ef-extra-edge .ef-extra-val{color:rgb(27 28 30/.3)}
 .ef-light .ef-extra.ef-ink-bright.ef-extra-edge .ef-extra-name{color:rgb(230 232 235/.3)}
