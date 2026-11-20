@@ -424,8 +424,8 @@
    blacked out at night, and metallic frames under an overcast night */
 .ef-light [fill="#141414"]{fill:#555a68}
 .ef-light [fill="#0c0c0c"]{fill:#474c5a}
-.ef-light{--ef-b1-body-1:#a9aeb9;--ef-b1-body-2:#8d93a0;--ef-b1-body-3:#6f7584;--ef-b1-body-4:#525764;
-  --ef-b2-body-1:#959aa6;--ef-b2-body-2:#7a808d;--ef-b2-body-3:#5d6270;--ef-b2-body-4:#434753}
+.ef{--ef-b1-body-top:#2b2d31;--ef-b1-body-rim:#585b61;--ef-b1-body-side:#161616;--ef-b2-body-top:#2d2f33;--ef-b2-body-rim:#5a5d63;--ef-b2-body-side:#18191b}
+.ef-light{--ef-b1-body-top:#d3d7df;--ef-b1-body-rim:#e3e6eb;--ef-b1-body-side:#737988;--ef-b2-body-top:#b4b8c1;--ef-b2-body-rim:#c9ccd3;--ef-b2-body-side:#5d6270}
 .ef-light [stroke="#0b0b0b"]{stroke:#29314c}
 .ef-light .ef-night-glass{opacity:calc(.25 * var(--ef-darkness,0))}
 .ef-light[data-time=night]:is([data-weather=cloudy],[data-weather=fog],[data-weather=drizzle],[data-weather=rain],[data-weather=heavy],[data-weather=snow],[data-weather=storm]) #ef-panel-frame stop:nth-child(1){stop-color:#7a8094}
@@ -485,9 +485,9 @@
 <linearGradient id="ef-gable" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--ef-gable-1,#272727)"/><stop offset="1" style="stop-color:var(--ef-gable-2,#1c1c1c)"/></linearGradient>
 <linearGradient id="ef-wall" x1="0" y1="0" x2="1" y2="1"><stop offset="0" style="stop-color:var(--ef-wall-1,#0a0a0a)"/><stop offset="1" style="stop-color:var(--ef-wall-2,#0f0f0f)"/></linearGradient>
 <linearGradient id="ef-pane" x1="0" y1="0" x2=".35" y2="1"><stop offset="0" style="stop-color:var(--ef-window-1,#d6d3ca)"/><stop offset="1" style="stop-color:var(--ef-window-2,#aeaba3)"/></linearGradient>
-<!-- battery bodies: lit from above like the charger, lighter at the top and darker towards the floor -->
-<linearGradient id="ef-b1-body" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--ef-b1-body-1,#4a4d52)"/><stop offset=".18" style="stop-color:var(--ef-b1-body-2,#303236)"/><stop offset=".6" style="stop-color:var(--ef-b1-body-3,#1b1c1e)"/><stop offset="1" style="stop-color:var(--ef-b1-body-4,#0c0c0d)"/></linearGradient>
-<linearGradient id="ef-b2-body" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--ef-b2-body-1,#4c4f55)"/><stop offset=".18" style="stop-color:var(--ef-b2-body-2,#323439)"/><stop offset=".6" style="stop-color:var(--ef-b2-body-3,#1d1e21)"/><stop offset="1" style="stop-color:var(--ef-b2-body-4,#0d0e0f)"/></linearGradient>
+<!-- battery bodies: flat sides with a narrow light rim where the top meets the side wall, a rounded edge like the charger's -->
+<linearGradient id="ef-b1-body" gradientUnits="userSpaceOnUse" x1="343.5" y1="896.2" x2="342.2" y2="901.0"><stop offset="0" style="stop-color:var(--ef-b1-body-top)"/><stop offset=".4" style="stop-color:var(--ef-b1-body-rim)"/><stop offset="1" style="stop-color:var(--ef-b1-body-side)"/></linearGradient>
+<linearGradient id="ef-b2-body" gradientUnits="userSpaceOnUse" x1="454.0" y1="890.1" x2="452.5" y2="894.9"><stop offset="0" style="stop-color:var(--ef-b2-body-top)"/><stop offset=".4" style="stop-color:var(--ef-b2-body-rim)"/><stop offset="1" style="stop-color:var(--ef-b2-body-side)"/></linearGradient>
 <linearGradient id="ef-b1-face" x1="0" y1="0" x2="1" y2="1"><stop offset="0" style="stop-color:var(--ef-b1-face-1,#eeeeee)"/><stop offset="1" style="stop-color:var(--ef-b1-face-2,#cdcdcd)"/></linearGradient>
 <linearGradient id="ef-b1-strip" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--ef-b1-strip-1,#8ac7a7)"/><stop offset="1" style="stop-color:var(--ef-b1-strip-2,#76b698)"/></linearGradient>
 <linearGradient id="ef-b2-face" x1="0" y1="0" x2="1" y2="1"><stop offset="0" style="stop-color:var(--ef-b2-face-1,#4b4e54)"/><stop offset="1" style="stop-color:var(--ef-b2-face-2,#2e3034)"/></linearGradient>
