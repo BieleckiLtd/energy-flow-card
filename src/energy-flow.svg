@@ -1309,7 +1309,10 @@
 <path d="M289 806 946 661 947.5 905 290 1071Z" fill="url(#ef-wall)"/>
 <!-- light mode: the eaves' shade on the top of the walls -->
 <g class="ef-light-only"><path d="M289 806 946 661 946.3 721 289.2 866Z" fill="url(#ef-eave-shade)"/>
-<path d="M70 513.5 289 806 289.2 866 70 560 0 610 0 568Z" fill="url(#ef-rake-shade)"/>
+<path d="M289 807.4 946 662.4" fill="none" stroke="#1e2230" stroke-opacity=".42" stroke-width="2.4"/>
+<path d="M70 513.5 289 806 289 822 57.2 523.1Z" fill="url(#ef-rake-shade)"/>
+<path d="M0 568 70 513.5 77.4 523 0 583Z" fill="url(#ef-rake-shade-l)"/>
+<path d="M0 569.4 70 515 289 807.4" fill="none" stroke="#1e2230" stroke-opacity=".42" stroke-width="2.4" stroke-linejoin="round" transform="translate(-.6 1.4)"/>
 <path d="M289 806 345 793.6 345.5 1056.8 290 1071Z" fill="url(#ef-corner-shade)"/>
 <path d="M289.2 807 290 1070" fill="none" stroke="#fff" stroke-opacity=".4" stroke-width="1.6"/></g>
 <g class="ef-frost"><path d="M289 806 946 661 947.5 905 290 1071Z" fill="url(#ef-frost-front-foot)" filter="url(#ef-frost-ice)"/></g>
@@ -3161,8 +3164,8 @@
 <linearGradient id="ef-lintel-shade" gradientUnits="userSpaceOnUse" x1="112" y1="756" x2="104" y2="800"><stop offset="0" stop-color="#151926" stop-opacity=".62"/><stop offset=".35" stop-color="#151926" stop-opacity=".2"/><stop offset="1" stop-color="#151926" stop-opacity="0"/></linearGradient>
 <linearGradient id="ef-corner-shade" gradientUnits="userSpaceOnUse" x1="290" y1="0" x2="345" y2="0"><stop offset="0" stop-color="#1e2230" stop-opacity=".2"/><stop offset="1" stop-color="#1e2230" stop-opacity="0"/></linearGradient>
 <filter id="ef-ao-blur" x="-10%" y="-60%" width="120%" height="220%"><feGaussianBlur stdDeviation="7"/></filter>
-<linearGradient id="ef-eave-shade" gradientUnits="userSpaceOnUse" x1="620" y1="733" x2="628" y2="790"><stop offset="0" stop-color="#1e2230" stop-opacity=".42"/><stop offset=".45" stop-color="#1e2230" stop-opacity=".14"/><stop offset="1" stop-color="#1e2230" stop-opacity="0"/></linearGradient>
-<linearGradient id="ef-rake-shade" gradientUnits="userSpaceOnUse" x1="180" y1="660" x2="150" y2="700"><stop offset="0" stop-color="#1e2230" stop-opacity=".55"/><stop offset=".25" stop-color="#1e2230" stop-opacity=".22"/><stop offset="1" stop-color="#1e2230" stop-opacity="0"/></linearGradient>
+<linearGradient id="ef-eave-shade" gradientUnits="userSpaceOnUse" x1="620" y1="733" x2="624.7" y2="754.5"><stop offset="0" stop-color="#1e2230" stop-opacity=".46"/><stop offset=".3" stop-color="#1e2230" stop-opacity=".22"/><stop offset="1" stop-color="#1e2230" stop-opacity="0"/></linearGradient>
+<linearGradient id="ef-rake-shade" gradientUnits="userSpaceOnUse" x1="180" y1="660" x2="167.2" y2="669.6"><stop offset="0" stop-color="#1e2230" stop-opacity=".5"/><stop offset=".3" stop-color="#1e2230" stop-opacity=".28"/><stop offset="1" stop-color="#1e2230" stop-opacity="0"/></linearGradient><linearGradient id="ef-rake-shade-l" gradientUnits="userSpaceOnUse" x1="35" y1="540.8" x2="41.1" y2="548.7"><stop offset="0" stop-color="#1e2230" stop-opacity=".45"/><stop offset=".3" stop-color="#1e2230" stop-opacity=".25"/><stop offset="1" stop-color="#1e2230" stop-opacity="0"/></linearGradient>
 <radialGradient id="ef-window-spill" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#ffd590" stop-opacity=".8"/><stop offset=".5" stop-color="#ffd590" stop-opacity=".3"/><stop offset="1" stop-color="#ffd48c" stop-opacity="0"/></radialGradient>
 <radialGradient id="ef-strip-spill" cx=".5" cy=".5" r=".5"><stop offset="0" style="stop-color:var(--ef-b1-color,#4dbd80)" stop-opacity=".55"/><stop offset="1" style="stop-color:var(--ef-b1-color,#4dbd80)" stop-opacity="0"/></radialGradient>
 <filter id="ef-reflection-soft" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="9 26"/></filter>
