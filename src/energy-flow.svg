@@ -279,6 +279,11 @@
 .ef-light #ef-clear-g stop:nth-child(2){stop-color:#9cc6f0;stop-opacity:.4}
 .ef-light #ef-clear-g stop:nth-child(3){stop-color:#9cc6f0}
 .ef-light #ef-grid-fade stop{stop-color:#f2f3f5}
+/* the grid pipe fades into whatever ground lies under it (a mask); the painted-over end stays only in the pulse
+   renderer's copy of the picture (ef-masking), where its alpha fades the pulses */
+.ef-light .ef-grid-pipe{mask:url(#ef-grid-fade-mask)}
+.ef-light #ef-grid-end{opacity:0}
+.ef-light.ef-masking #ef-grid-end{opacity:1;stroke-width:34}
 /* soft shadows: the house's on the ground, the gable's corner, under the arrays */
 .ef-light #ef-shadow{opacity:.18}
 .ef-light [fill="url(#ef-gable-shade)"]{opacity:.12}
@@ -471,6 +476,8 @@
 <linearGradient id="ef-meter-bezel" x1="0" y1="0" x2=".6" y2="1"><stop offset="0" stop-color="#c9c9cb"/><stop offset="1" stop-color="#6b6b6d"/></linearGradient>
 <radialGradient id="ef-meter-glass" cx=".4" cy=".35" r=".7"><stop offset="0" stop-color="#e4e4e6"/><stop offset=".7" stop-color="#a6a6a8"/><stop offset="1" stop-color="#7c7c7e"/></radialGradient>
 <linearGradient id="ef-grid-fade" gradientUnits="userSpaceOnUse" x1="850" y1="1087.5" x2="938" y2="1119.5"><stop offset="0" stop-color="#1a1b1d" stop-opacity="0"/><stop offset=".5" stop-color="#1a1b1d" stop-opacity=".72"/><stop offset="1" stop-color="#1a1b1d"/></linearGradient>
+<linearGradient id="ef-grid-fade-alpha" gradientUnits="userSpaceOnUse" x1="850" y1="1087.5" x2="938" y2="1119.5"><stop offset="0" stop-color="#fff"/><stop offset=".5" stop-color="#474747"/><stop offset="1" stop-color="#000"/></linearGradient>
+<mask id="ef-grid-fade-mask" maskUnits="userSpaceOnUse" x="-200" y="-200" width="1600" height="1800"><rect x="-200" y="-200" width="1600" height="1800" fill="url(#ef-grid-fade-alpha)"/></mask>
 <!-- The pipe surfaces continue behind the box and the window. -->
 <path id="ef-rail-b1" d="M423.5 889.5L583 855.2"/>
 <path id="ef-rail-b2" d="M527 886.2L583 874.2"/>
@@ -2444,7 +2451,7 @@
   </g>
   <use href="#ef-rail-grid" class="ef-pipe-shade"/>
 </g>
-<path d="M850 1087.5L962 1128.2" fill="none" stroke="url(#ef-grid-fade)" stroke-width="15"/>
+<path id="ef-grid-end" d="M850 1087.5L962 1128.2" fill="none" stroke="url(#ef-grid-fade)" stroke-width="15"/>
 
 <!-- window: every corner placed on the front wall's own top-to-bottom lines, so its edges recede with the wall -->
 <path d="M757 734.5 931.5 695.3 931.5 850.3 757 893Z" fill="#141414"/>

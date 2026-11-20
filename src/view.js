@@ -763,6 +763,7 @@ class PulseRenderer {
     // further for each. What goes is settled from the elements' places in the whole copy, taken before any is gone.
     const clone = this.svg.cloneNode(true);
     clone.classList.remove("ef-baked", "ef-gl", "ef-paused", "ef-still");
+    clone.classList.add("ef-masking");  // parts drawn only to fade the pulses (the grid pipe's end in light mode)
     clone.style.removeProperty("position");
     clone.setAttribute("viewBox", box.join(" "));
     clone.setAttribute("width", width);
