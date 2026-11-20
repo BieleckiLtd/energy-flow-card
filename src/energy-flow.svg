@@ -300,6 +300,12 @@
 .ef-light #ef-meter-side stop:nth-child(1){stop-color:#a9abae}
 .ef-light #ef-meter-side stop:nth-child(2){stop-color:#96989b}
 .ef-light [fill="#6d6d6f"]{fill:#b2b4b7}
+/* the open garage inside: light grey, a little shaded under its roof */
+.ef-light #ef-garage-side stop:nth-child(1){stop-color:#c4c8ce}
+.ef-light #ef-garage-side stop:nth-child(2){stop-color:#b2b6bd}
+.ef-light #ef-garage-floor stop:nth-child(1){stop-color:#a9adb4}
+.ef-light #ef-garage-floor stop:nth-child(2){stop-color:#cfd2d7}
+.ef-light #ef-garage [stroke="#0b0b0c"]{stroke:#8d9198}
 .ef-light #ef-garage-slat stop:nth-child(1){stop-color:#d8dadd}
 .ef-light #ef-garage-slat stop:nth-child(2){stop-color:#c4c6c9}
 .ef-light #ef-garage-slat stop:nth-child(3){stop-color:#a9abaf}
@@ -370,6 +376,10 @@
   --ef-wall-1:color-mix(in srgb,#f4f4f3,var(--ef-n-wall) var(--ef-moonlit));--ef-wall-2:color-mix(in srgb,#eeeeed,var(--ef-n-wall) var(--ef-moonlit));--ef-gable-1:color-mix(in srgb,#f3f4f5,var(--ef-n-wall) var(--ef-moonlit));--ef-gable-2:color-mix(in srgb,#eceef1,var(--ef-n-wall) var(--ef-moonlit));--ef-garage-wall:color-mix(in srgb,#e4e6e9,var(--ef-n-wall) var(--ef-moonlit));--ef-jamb:color-mix(in srgb,#eef0f3,var(--ef-n-wall) var(--ef-moonlit));
   --ef-door:color-mix(in srgb,#eceef0,var(--ef-n-door) var(--ef-moondoor));--ef-door-line:color-mix(in srgb,#cdd0d4,var(--ef-n-door) var(--ef-moondoor));
   --ef-roof-1:color-mix(in srgb,#8f9297,var(--ef-n-roof) var(--ef-moonroof));--ef-roof-2:color-mix(in srgb,#85888d,var(--ef-n-roof) var(--ef-moonroof));--ef-roof-3:color-mix(in srgb,#7f8287,var(--ef-n-roof) var(--ef-moonroof));--ef-roof-back-1:color-mix(in srgb,#94979c,var(--ef-n-roof) var(--ef-moonroof));--ef-roof-back-2:color-mix(in srgb,#8a8d92,var(--ef-n-roof) var(--ef-moonroof));--ef-roof-edge:color-mix(in srgb,#a4a7ab,var(--ef-n-roof) var(--ef-moonroof));--ef-roof-line:color-mix(in srgb,#7c7f84,var(--ef-n-roof) var(--ef-moonroof));--ef-fascia:color-mix(in srgb,#a8abaf,var(--ef-n-roof) var(--ef-moonroof));--ef-roof-ridge:color-mix(in srgb,#b8bbbf,var(--ef-n-roof) var(--ef-moonroof))}
+.ef-light #ef-garage-side stop:nth-child(1){stop-color:color-mix(in srgb,#c4c8ce,var(--ef-n-door) var(--ef-moondoor))}
+.ef-light #ef-garage-side stop:nth-child(2){stop-color:color-mix(in srgb,#b2b6bd,var(--ef-n-door) var(--ef-moondoor))}
+.ef-light #ef-garage-floor stop:nth-child(1){stop-color:color-mix(in srgb,#a9adb4,var(--ef-n-door) var(--ef-moondoor))}
+.ef-light #ef-garage-floor stop:nth-child(2){stop-color:color-mix(in srgb,#cfd2d7,var(--ef-n-door) var(--ef-moondoor))}
 .ef-light #ef-sky stop:nth-child(1){stop-color:color-mix(in srgb,#c9d0d8,var(--ef-n-sky) var(--ef-moonsky))}
 .ef-light #ef-sky stop:nth-child(2){stop-color:color-mix(in srgb,#d1d7de,var(--ef-n-sky) var(--ef-moonsky))}
 .ef-light #ef-sky stop:nth-child(3){stop-color:color-mix(in srgb,#d8dde3,var(--ef-n-sky) var(--ef-moonsky))}
