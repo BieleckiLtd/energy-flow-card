@@ -1929,17 +1929,17 @@ export class EnergyFlowView {
   }
 
   // White ink over a dark background, brighter over a lighter one, and a dark halo over a bright one. In light mode
-  // the ink stays dark, day and night, with a white glow over a dark patch (ef-ink-bright).
+  // the ink is dark, and white with a soft dark shadow over a dark patch (ef-ink-bright).
   ink(label, luminance, share) {
     if (this.svg.classList.contains("ef-light")) {
       const on = label.classList.contains("ef-ink-bright");
-      // A glow wherever the dark ink would fall below a 3:1 contrast with its background (the night sky, a grey roof
-      // under an idle value), or much of the label sits over something very dark (the panels). Each ink's luminance
-      // is fixed by its role, not read back, since the glow itself darkens the ink.
+      // White ink (with a soft dark shadow) wherever it reads better than the dark ink: over the night sky, a grey
+      // roof under an idle value, or where much of the label sits over something very dark (the panels). The switch
+      // is where both inks have the same contrast with the background; each ink's luminance is fixed by its role.
       const ink = label.classList.contains("ef-cap") ? .06 : label.querySelector?.(".ef-idle") || label.classList.contains("ef-idle") ? .11
         : share === undefined ? .1 : .011;
-      const dim = luminance < (3 * (ink + .05) - .05) * (on ? 1.15 : 1);
-      const dark = dim || share !== undefined && share > (on ? .2 : .28);
+      const even = Math.sqrt(.95 * (ink + .05)) - .05;
+      const dark = luminance < even * (on ? 1.15 : 1) || share !== undefined && share > (on ? .2 : .28);
       label.classList.remove("ef-ink-lifted");
       label.classList.toggle("ef-ink-bright", dark);
       return;
