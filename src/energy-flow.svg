@@ -383,11 +383,11 @@
 .ef-light #ef-shadow polygon:nth-child(n+3){display:none}
 .ef-light #ef-shadow{opacity:.5}
 .ef-light:not([data-weather=clear]):not([data-weather=partly]) #ef-shadow,.ef-light[data-time=night] #ef-shadow{opacity:.2}
-.ef-light .ef-reflection{opacity:.3}
-.ef-light #ef-window-reflection{opacity:.45}
-.ef-light[data-time=night] #ef-window-reflection{opacity:1}
-.ef-light[data-time=night] :is(#ef-b1-reflection,#ef-b2-reflection){opacity:.85}
-.ef-light :is(#ef-b1-reflection,#ef-b2-reflection){opacity:.55}
+.ef-light .ef-reflection{opacity:.18}
+.ef-light #ef-window-reflection{opacity:.28}
+.ef-light[data-time=night] #ef-window-reflection{opacity:.55}
+.ef-light[data-time=night] :is(#ef-b1-reflection,#ef-b2-reflection){opacity:.5}
+.ef-light :is(#ef-b1-reflection,#ef-b2-reflection){opacity:.32}
 /* the glossy ground mirrors further than the dark one */
 .ef-light :is(#ef-window-reflection-fade,#ef-b1-reflection-fade,#ef-b2-reflection-fade) stop:nth-child(2){stop-opacity:.75}
 .ef-light #ef-window-reflection-fade stop:nth-child(3){stop-opacity:.08}
@@ -1302,8 +1302,8 @@
   <path d="M0 714 235 797.5 235 857.5 0 774Z" fill="url(#ef-lintel-shade)"/>
   <path d="M224 793.6 235 797.5 235 1047.5 224 1043.6Z" fill="#151926" fill-opacity=".34"/>
   <path d="M0 711 236.5 795 236.5 1049" fill="none" stroke="#3b404d" stroke-opacity=".85" stroke-width="6"/>
-  <path d="M0 957.5 235 1041" fill="none" stroke="#1d2130" stroke-opacity=".45" stroke-width="2"/>
-  <path d="M0 961.5 235 1045" fill="none" stroke="#e6e9ef" stroke-opacity=".95" stroke-width="6.5"/>
+  <path d="M0 956.5 235 1040 235 1042 0 958.5Z" fill="#1d2130" fill-opacity=".45"/>
+  <path d="M0 958.5 235 1042 235 1048.5 0 965Z" fill="#e6e9ef" fill-opacity=".95"/>
 </g>
 
 <g class="ef-snowcap"><path id="ef-garage-snow" d="M0 714L0 714 6.7 714.9 13.4 715.9 20.1 717.9 26.9 720.1 33.6 722.5 40.3 724.9 47 727.4 53.7 729.9 60.4 732.3 67.1 734.7 73.9 737.1 80.6 739.5 87.3 741.9 94 744.3 100.7 746.7 107.4 749.2 114.1 751.6 120.9 754 127.6 756.5 134.3 759.1 141 761.6 147.7 764 154.4 766.4 161.1 768.7 167.9 771.1 174.6 773.4 181.3 775.7 188 777.8 194.7 779.9 201.4 782 208.1 784.4 214.9 787.1 221.6 790 228.3 793.8 235 797.5L235 797.5Z"/><path d="M0 968L0 968 8.3 970.9 16.6 974.3 24.9 978.8 33.1 983 41.4 986.3 49.7 990 58 993.8 66.3 997.5 74.6 1000.7 82.9 1001.7 91.1 1000.8 99.4 1003.3 107.7 1006.3 116 1009.2 124.3 1012.1 132.6 1015.1 140.9 1019 149.1 1022.4 157.4 1027.4 165.7 1033.4 174 1038.8 182.3 1042.5 190.6 1044.4 198.9 1045.2 207.1 1046 215.4 1047.8 223.7 1050.1 232 1051.2 240.3 1053.3 248.6 1056.3 256.9 1059.2 265.1 1062.2 273.4 1065.8 281.7 1070 290 1071L290 1071Z"/></g>
@@ -3160,16 +3160,16 @@
 <!-- the window mirrored in the ground: each point dropped as far below the wall foot as it stands above it, softened and fading with distance -->
 <linearGradient id="ef-window-reflection-fade" gradientUnits="userSpaceOnUse" x1="844" y1="931.1" x2="897" y2="1141.1"><stop offset="0" stop-color="#fff"/><stop offset=".45" stop-color="#fff" stop-opacity=".45"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
 <mask id="ef-window-reflection-mask" maskUnits="userSpaceOnUse" x="720" y="890" width="250" height="320"><rect x="720" y="890" width="250" height="320" fill="url(#ef-window-reflection-fade)"/></mask>
-<linearGradient id="ef-wall-mirror" gradientUnits="userSpaceOnUse" x1="618" y1="988" x2="636" y2="1090"><stop offset="0" style="stop-color:var(--ef-wall-1,#f4f4f3)" stop-opacity=".75"/><stop offset=".5" style="stop-color:var(--ef-wall-1,#f4f4f3)" stop-opacity=".25"/><stop offset="1" style="stop-color:var(--ef-wall-1,#f4f4f3)" stop-opacity="0"/></linearGradient>
-<linearGradient id="ef-door-mirror" gradientUnits="userSpaceOnUse" x1="118" y1="1006" x2="100" y2="1100"><stop offset="0" style="stop-color:var(--ef-door,#eceef0)" stop-opacity=".6"/><stop offset="1" style="stop-color:var(--ef-door,#eceef0)" stop-opacity="0"/></linearGradient>
-<linearGradient id="ef-gable-mirror" gradientUnits="userSpaceOnUse" x1="266" y1="1060" x2="250" y2="1150"><stop offset="0" style="stop-color:var(--ef-gable-2,#d9dbdf)" stop-opacity=".6"/><stop offset="1" style="stop-color:var(--ef-gable-2,#d9dbdf)" stop-opacity="0"/></linearGradient>
-<linearGradient id="ef-lintel-shade" gradientUnits="userSpaceOnUse" x1="112" y1="756" x2="104" y2="800"><stop offset="0" stop-color="#151926" stop-opacity=".62"/><stop offset=".35" stop-color="#151926" stop-opacity=".2"/><stop offset="1" stop-color="#151926" stop-opacity="0"/></linearGradient>
+<linearGradient id="ef-wall-mirror" gradientUnits="userSpaceOnUse" x1="618" y1="988" x2="636" y2="1090"><stop offset="0" style="stop-color:var(--ef-wall-1,#f4f4f3)" stop-opacity=".4"/><stop offset=".5" style="stop-color:var(--ef-wall-1,#f4f4f3)" stop-opacity=".12"/><stop offset="1" style="stop-color:var(--ef-wall-1,#f4f4f3)" stop-opacity="0"/></linearGradient>
+<linearGradient id="ef-door-mirror" gradientUnits="userSpaceOnUse" x1="118" y1="1006" x2="100" y2="1100"><stop offset="0" style="stop-color:var(--ef-door,#eceef0)" stop-opacity=".3"/><stop offset="1" style="stop-color:var(--ef-door,#eceef0)" stop-opacity="0"/></linearGradient>
+<linearGradient id="ef-gable-mirror" gradientUnits="userSpaceOnUse" x1="266" y1="1060" x2="250" y2="1150"><stop offset="0" style="stop-color:var(--ef-gable-2,#d9dbdf)" stop-opacity=".3"/><stop offset="1" style="stop-color:var(--ef-gable-2,#d9dbdf)" stop-opacity="0"/></linearGradient>
+<linearGradient id="ef-lintel-shade" gradientUnits="userSpaceOnUse" x1="112" y1="756" x2="97.3" y2="797.5"><stop offset="0" stop-color="#151926" stop-opacity=".62"/><stop offset=".35" stop-color="#151926" stop-opacity=".2"/><stop offset="1" stop-color="#151926" stop-opacity="0"/></linearGradient>
 <linearGradient id="ef-corner-shade" gradientUnits="userSpaceOnUse" x1="290" y1="0" x2="345" y2="0"><stop offset="0" stop-color="#1e2230" stop-opacity=".2"/><stop offset="1" stop-color="#1e2230" stop-opacity="0"/></linearGradient>
 <filter id="ef-ao-blur" x="-10%" y="-60%" width="120%" height="220%"><feGaussianBlur stdDeviation="7"/></filter>
 <linearGradient id="ef-eave-shade" gradientUnits="userSpaceOnUse" x1="620" y1="733" x2="624.7" y2="754.5"><stop offset="0" stop-color="#1e2230" stop-opacity=".46"/><stop offset=".3" stop-color="#1e2230" stop-opacity=".22"/><stop offset="1" stop-color="#1e2230" stop-opacity="0"/></linearGradient>
 <linearGradient id="ef-rake-shade" gradientUnits="userSpaceOnUse" x1="180" y1="660" x2="167.2" y2="669.6"><stop offset="0" stop-color="#1e2230" stop-opacity=".5"/><stop offset=".3" stop-color="#1e2230" stop-opacity=".28"/><stop offset="1" stop-color="#1e2230" stop-opacity="0"/></linearGradient><linearGradient id="ef-rake-shade-l" gradientUnits="userSpaceOnUse" x1="35" y1="540.8" x2="41.1" y2="548.7"><stop offset="0" stop-color="#1e2230" stop-opacity=".45"/><stop offset=".3" stop-color="#1e2230" stop-opacity=".25"/><stop offset="1" stop-color="#1e2230" stop-opacity="0"/></linearGradient>
-<radialGradient id="ef-window-spill" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#ffd590" stop-opacity=".8"/><stop offset=".5" stop-color="#ffd590" stop-opacity=".3"/><stop offset="1" stop-color="#ffd48c" stop-opacity="0"/></radialGradient>
-<radialGradient id="ef-strip-spill" cx=".5" cy=".5" r=".5"><stop offset="0" style="stop-color:var(--ef-b1-color,#4dbd80)" stop-opacity=".55"/><stop offset="1" style="stop-color:var(--ef-b1-color,#4dbd80)" stop-opacity="0"/></radialGradient>
+<radialGradient id="ef-window-spill" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#ffd590" stop-opacity=".5"/><stop offset=".5" stop-color="#ffd590" stop-opacity=".18"/><stop offset="1" stop-color="#ffd48c" stop-opacity="0"/></radialGradient>
+<radialGradient id="ef-strip-spill" cx=".5" cy=".5" r=".5"><stop offset="0" style="stop-color:var(--ef-b1-color,#4dbd80)" stop-opacity=".35"/><stop offset="1" style="stop-color:var(--ef-b1-color,#4dbd80)" stop-opacity="0"/></radialGradient>
 <filter id="ef-reflection-soft" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="9 26"/></filter>
 <filter id="ef-reflection-blur" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="6 11"/></filter>
 <g id="ef-window-reflection" class="ef-reflection" mask="url(#ef-window-reflection-mask)"><g style="fill:var(--ef-window-mirror,#cfccc3)" filter="url(#ef-reflection-blur)">
