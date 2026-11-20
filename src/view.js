@@ -463,11 +463,11 @@ const DASHES = 52;  // dashes read per piece (the svg has 51)
 // adding up every dash. The strip's long edges are smoothed here too (a_out: -1 left edge, 1 right edge, pushed out by
 // a pixel), so the canvas needs no multisampling.
 const PULSE_VERTEX = `attribute vec2 a_pos,a_n,a_e;attribute float a_s,a_out;
-uniform mat3 u_m;uniform float u_aa,u_grow;varying float v_s;varying vec2 v_svg,v_e;
-void main(){float o=u_aa+u_grow;vec3 p=u_m*vec3(a_pos+a_n*a_out*o,1.);v_svg=p.xy;v_s=a_s;v_e=a_e+vec2(a_out,-a_out)*o;
+uniform mat3 u_m;uniform float u_aa;varying float v_s;varying vec2 v_svg,v_e;
+void main(){float o=u_aa;vec3 p=u_m*vec3(a_pos+a_n*a_out*o,1.);v_svg=p.xy;v_s=a_s;v_e=a_e+vec2(a_out,-a_out)*o;
 gl_Position=vec4(p.x/585.-1.,1.-p.y/704.,0.,1.);}`;
 const PULSE_FRAGMENT = `precision highp float;
-uniform float u_shift,u_period,u_aa,u_alpha,u_clipOn,u_grow,u_glow;
+uniform float u_shift,u_period,u_aa,u_alpha,u_clipOn;
 uniform vec3 u_color;
 uniform vec2 u_clip[4];
 uniform vec4 u_box;
@@ -476,8 +476,7 @@ varying float v_s;varying vec2 v_svg,v_e;
 float edge(vec2 a,vec2 b){vec2 d=normalize(b-a);return (v_svg-a).y*d.x-(v_svg-a).x*d.y;}
 void main(){
   float a=texture2D(u_pattern,vec2(fract((v_s+u_shift)/u_period),.5)).a*u_alpha;
-  if(u_glow>0.){float d=max(-min(v_e.x,v_e.y),0.);a*=u_glow*exp(-d*d/(u_grow*u_grow*.2));}
-  else a*=clamp(min(v_e.x,v_e.y)/u_aa+.5,0.,1.);
+  a*=clamp(min(v_e.x,v_e.y)/u_aa+.5,0.,1.);
   if(u_clipOn>0.){
     float d=min(min(edge(u_clip[0],u_clip[1]),edge(u_clip[1],u_clip[2])),min(edge(u_clip[2],u_clip[3]),edge(u_clip[3],u_clip[0])));
     a*=clamp(d/u_aa+.5,0.,1.);
@@ -502,8 +501,7 @@ export function dashPattern(lengths, opacities, lead, period, aa, size) {
   }
   return out;
 }
-const PULSE_BOX = [0, 640, 1000, 520];
-const GLOW_GROW = 12, GLOW_STRENGTH = .7;  // light mode's glow round each pulse: how far (picture units) and how strong  // x, y, width, height: where pulses can be, in the picture's units
+const PULSE_BOX = [0, 640, 1000, 520];  // x, y, width, height: where pulses can be, in the picture's units
 const MASK_WAIT = 700;  // ms after a change before the masks are drawn again (lanes slide for .55 s)
 const CONFIG_SETTLE = 400;  // ms without a config change before the picture is sampled again
 class PulseRenderer {
@@ -534,7 +532,7 @@ class PulseRenderer {
     this.a = {};
     for (const n of ["pos", "n", "e", "s", "out"]) { this.a[n] = gl.getAttribLocation(program, `a_${n}`); gl.enableVertexAttribArray(this.a[n]); }
     this.u = {};
-    for (const n of ["u_m", "u_shift", "u_period", "u_aa", "u_alpha", "u_clipOn", "u_color", "u_clip", "u_box", "u_mask", "u_pattern", "u_grow", "u_glow"]) {
+    for (const n of ["u_m", "u_shift", "u_period", "u_aa", "u_alpha", "u_clipOn", "u_color", "u_clip", "u_box", "u_mask", "u_pattern"]) {
       this.u[n] = gl.getUniformLocation(program, n);
     }
     gl.uniform1i(this.u.u_mask, 0);
@@ -877,8 +875,6 @@ class PulseRenderer {
     const aa = 1170 / this.canvas.width;
     gl.uniform1f(u.u_aa, aa);
     gl.uniform4f(u.u_box, ...this.box);
-    // In light mode the pulses glow: each is drawn once more first, wider and soft, under itself (not at low detail).
-    const glow = this.svg.classList.contains("ef-light") && !this.svg.classList.contains("ef-low");
     // Each lane's [moving, opacity], read once after a reading and then only while it slides: a style read every
     // frame made the browser bring the picture's styles up to date every frame.
     const lines = this.lineStates ??= new Map();
@@ -917,13 +913,6 @@ class PulseRenderer {
       gl.vertexAttribPointer(at.e, 2, gl.FLOAT, false, 32, 16);
       gl.vertexAttribPointer(at.s, 1, gl.FLOAT, false, 32, 24);
       gl.vertexAttribPointer(at.out, 1, gl.FLOAT, false, 32, 28);
-      if (glow) {
-        gl.uniform1f(u.u_grow, GLOW_GROW);
-        gl.uniform1f(u.u_glow, GLOW_STRENGTH);
-        gl.drawArrays(gl.TRIANGLES, 0, piece.count);
-      }
-      gl.uniform1f(u.u_grow, 0);
-      gl.uniform1f(u.u_glow, 0);
       gl.drawArrays(gl.TRIANGLES, 0, piece.count);
     }
   }
@@ -1895,7 +1884,7 @@ export class EnergyFlowView {
     box.x += label.shift || 0;  // centred on its leader (alignLabels)
     const luminance = this.lightBehind(context, scale, box);
     if (luminance === null) return;
-    // In light mode a label gets its glow only where much of it sits over something very dark (the panels).
+    // In light mode a label turns white over a dark background, or where much of it sits over the panels.
     if (this.svg.classList.contains("ef-light")) this.ink(label, luminance, this.darkShare(context, scale, box));
     else this.ink(label, luminance);
   }
