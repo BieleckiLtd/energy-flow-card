@@ -397,7 +397,7 @@
    blacked out at night, and metallic frames under an overcast night */
 .ef-light [fill="#141414"]{fill:#555a68}
 .ef-light [fill="#0c0c0c"]{fill:#474c5a}
-.ef-light #ef-b1-battery [fill="#161616"]{fill:#8f95a3}
+.ef-light #ef-b1-battery [fill="#161616"]{fill:#737988}
 .ef-light #ef-b2-battery [fill="#18191b"]{fill:#5d6270}
 .ef-light [stroke="#0b0b0b"]{stroke:#29314c}
 .ef-light .ef-night-glass{opacity:calc(.25 * var(--ef-darkness,0))}
@@ -2683,6 +2683,7 @@
 <!-- Battery 1 -->
 <g id="ef-b1-battery">
 <path d="M335 894 409 878.5 420.5 884 420.5 1048 350 1064 336 1059Z" fill="#161616"/>
+<path class="ef-light-only" d="M335 894 409 878.5 420.5 884 352 898.4Z" fill="#d3d7df"/>
 <polygon id="ef-b1-level" data-full="338,1055.7 346.5,1058.8 346.5,902.1 338,899.1" points="338,1055.7 346.5,1058.8 346.5,958.5 338.0,955.5" fill="url(#ef-b1-strip)"/>
 <path d="M352 898.4 420 884.1Q423 883.5 423 886.5L423.5 1044.5Q423.5 1047.5 420.6 1048.2L353 1063.3Q350 1064 350 1061L349 902Q349 899 352 898.4Z" fill="url(#ef-b1-face)"/>
 <path d="M356.5 898 420 884.1Q423 883.5 423 886.5L423.4 1040Z" fill="#fff" opacity=".28"/>
