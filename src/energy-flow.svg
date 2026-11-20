@@ -202,6 +202,10 @@
    down to close it once the label has gone. Moved, not clipped: browsers do not repaint an svg clip-path as it animates. */
 #ef-shutter-slide{transition:transform 1.4s cubic-bezier(.45,0,.25,1) .2s}
 .ef-garage-open #ef-shutter-slide{transform:translateY(-238px);transition-delay:0s}
+/* the lintel's shade (60 tall) moves only while the bottom bar passes through it: the last 22.5 % of the shutter's travel
+   going up, the first 22.5 % coming down; times and curves are those stretches of the shutter's own curve */
+#ef-shutter-shade{transition:transform .39s cubic-bezier(.35,0,.7,.2) .2s}
+.ef-garage-open #ef-shutter-shade{transform:translateY(-60px);transition:transform .66s cubic-bezier(.3,.85,.7,1) .74s}
 /* In the heat the still parts are a snapshot on the shimmer canvas, which jumps straight to the new state: while the
    shutter moves, the garage and shutter are drawn live over it. */
 .ef-baked.ef-garage-moving :is(#ef-garage,#ef-shutter){visibility:visible}
@@ -229,8 +233,8 @@
 /* with the garage shut there is no shutter to wait for */
 .ef-ev-on:not(.ef-garage-open) #ef-ev-lead{transition-delay:0s,0s}
 .ef-ev-on:not(.ef-garage-open) #ef-ev-label{transition-delay:.22s,.22s,.22s}
-.ef-still :is(#ef-shutter-slide,#ef-ev-lead,#ef-ev-label){transition:none!important}
-@media (prefers-reduced-motion:reduce){:is(#ef-shutter-slide,#ef-ev-lead,#ef-ev-label){transition:none!important}}
+.ef-still :is(#ef-shutter-slide,#ef-shutter-shade,#ef-ev-lead,#ef-ev-label){transition:none!important}
+@media (prefers-reduced-motion:reduce){:is(#ef-shutter-slide,#ef-shutter-shade,#ef-ev-lead,#ef-ev-label){transition:none!important}}
 .ef-garage-lamp{opacity:calc(.5 + .5 * var(--ef-darkness,0));transition:opacity .65s ease-out}
 .ef-ev-led{fill:#3ddc97}
 /* Residual snow: shown only while it snows, dimmer at night. */
@@ -1355,12 +1359,14 @@
 </g>
 <!-- the shutter as it rolls up or down: the door again, over the open garage, sliding within the doorway -->
 <g id="ef-shutter" clip-path="url(#ef-garage-opening)"><g id="ef-shutter-slide"><use href="#ef-garage-door"/>
-<!-- light mode: the lintel's shade on the shutter's top and its bright bottom bar, which go up with it -->
+<!-- light mode: the shutter's bright bottom bar, which goes up with it -->
 <g class="ef-light-only">
-  <path d="M0 714 235 797.5 235 857.5 0 774Z" fill="url(#ef-lintel-shade)"/>
   <path d="M0 956.5 235 1040 235 1042 0 958.5Z" fill="#1d2130" fill-opacity=".45"/>
   <path d="M0 958.5 235 1042 235 1048.5 0 965Z" fill="#e6e9ef" fill-opacity=".95"/>
-</g></g></g>
+</g></g>
+<!-- light mode: the lintel's shade on the shutter. The lintel casts it, so it stays put while the shutter rolls and only
+     goes up with the last slat, once the bottom bar reaches it (its own timing below, matched to the shutter's) -->
+<g class="ef-light-only"><path id="ef-shutter-shade" d="M0 714 235 797.5 235 857.5 0 774Z" fill="url(#ef-lintel-shade)"/></g></g>
 <path d="M235 797.5 244 788 244 1055 235 1047.5Z" style="fill:var(--ef-jamb,#0f0f0f)"/>
 <!-- light mode: the doorway's shading: the jamb casts a thin shadow on its right and a dark frame runs round the
      opening (the lintel's shade and the bright bottom bar belong to the shutter and slide up with it) -->
