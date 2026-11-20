@@ -310,6 +310,8 @@
 .ef-light .ef-ink-bright.ef-cap{fill:#e6e8eb}
 .ef-light .ef-ink-bright.ef-val,.ef-light .ef-ink-bright .ef-idle{fill:#f4f4f4}
 .ef-light #ef-labels .ef-ink-bright{filter:drop-shadow(0 0 6px rgb(10 14 28/.3)) drop-shadow(0 0 16px rgb(10 14 28/.22))}
+.ef-light #ef-labels .ef-ink-haze{filter:drop-shadow(0 0 5px rgb(255 255 255/.8)) drop-shadow(0 0 14px rgb(255 255 255/.5))}
+.ef-light .ef-ink-haze.ef-idle,.ef-light .ef-ink-haze .ef-idle{fill:#3e4146}
 .ef-light .ef-extra-name{color:#55595f}
 .ef-light .ef-extra-val{color:#1b1c1e}
 .ef-light .ef-extra.ef-ink-bright .ef-extra-name{color:#e6e8eb}
@@ -323,7 +325,7 @@
 /* the leaders that run down over the panels and the roof are white, day and night */
 .ef-light :is(#ef-solar-lead,#ef-home-lead,#ef-ev-lead){stroke:#fff;stroke-opacity:.82}
 /* light grey pipes */
-.ef-light .ef-lane{stroke:#c4c7cb}
+.ef-light :is(.ef-lane,.ef-drop-pipe){stroke:#c4c7cb}
 .ef-light .ef-pipe-shade{stroke-opacity:.1}
 .ef-light .ef-line .ef-lane{stroke:#c4c7cb;stroke-opacity:1}
 .ef-light .ef-line .ef-pipe-shade{stroke:#fff;stroke-opacity:.7}
@@ -348,7 +350,7 @@
 .ef-light[data-time=night] .ef-lead{stroke:#fff;stroke-opacity:.75}
 .ef-light[data-time=night]:is([data-weather=cloudy],[data-weather=fog],[data-weather=drizzle],[data-weather=rain],[data-weather=heavy],[data-weather=snow],[data-weather=storm]) .ef-lead{stroke:#3a3d45;stroke-opacity:.55}
 /* overcast night: darker pipes, panel frames and meter box */
-.ef-light[data-time=night]:is([data-weather=cloudy],[data-weather=fog],[data-weather=drizzle],[data-weather=rain],[data-weather=heavy],[data-weather=snow],[data-weather=storm]) :is(.ef-lane,.ef-line .ef-lane){stroke:#7e8393}
+.ef-light[data-time=night]:is([data-weather=cloudy],[data-weather=fog],[data-weather=drizzle],[data-weather=rain],[data-weather=heavy],[data-weather=snow],[data-weather=storm]) :is(.ef-lane,.ef-line .ef-lane,.ef-drop-pipe){stroke:#7e8393}
 .ef-light[data-time=night]:is([data-weather=cloudy],[data-weather=fog],[data-weather=drizzle],[data-weather=rain],[data-weather=heavy],[data-weather=snow],[data-weather=storm]) .ef-line .ef-pipe-shade{stroke-opacity:.18}
 .ef-light[data-time=night]:is([data-weather=cloudy],[data-weather=fog],[data-weather=drizzle],[data-weather=rain],[data-weather=heavy],[data-weather=snow],[data-weather=storm]) #ef-panel-frame stop:nth-child(1){stop-color:#545967}
 .ef-light[data-time=night]:is([data-weather=cloudy],[data-weather=fog],[data-weather=drizzle],[data-weather=rain],[data-weather=heavy],[data-weather=snow],[data-weather=storm]) #ef-panel-frame stop:nth-child(2){stop-color:#4a4f5c}
@@ -793,7 +795,7 @@
        behind the shutter box. Its route runs from the car (the source, like a battery) to the junction overhead: up the
        charging cable (thin pulses), through the box, then up the pipe, whose foot is hidden behind the box. -->
   <g id="ef-ev-drop" fill="none" stroke-width="13">
-    <path d="M60 815V740" stroke="#4c4c4c"/>
+    <path class="ef-drop-pipe" d="M60 815V740" stroke="#4c4c4c"/>
     <!-- the charging cable, in the wall box's frame: drawn under the pulses so they run along it -->
     <g transform="matrix(1 -.2317 0 1 37 795.5)">
       <path d="M23.7 44V55C23.7 82 25.5 100 31 110C35.5 117.5 42 121 52 122" stroke="#0e0f11" stroke-width="3.4" stroke-linecap="round"/>
@@ -2498,7 +2500,7 @@
 <!-- the solar drop: one tube from under the array, over the eave, down to the meter box -->
 <g id="ef-solar-drop">
 <g fill="none" stroke-width="13">
-<path d="M561.3 689L563.9 694.4C572.6 712.4 580 728 580 750V873.4" stroke="#4c4c4c"/>
+<path class="ef-drop-pipe" d="M561.3 689L563.9 694.4C572.6 712.4 580 728 580 750V873.4" stroke="#4c4c4c"/>
 <g id="ef-f-solar" class="ef-flow" data-route="ef-route-solar" data-junction-end="" data-flow="out" style="--ef-source-color:var(--ef-solar-color,#d6a62c)">
   <g>
     <use class="ef-pulse ef-p1" href="#ef-route-solar-eave"/>

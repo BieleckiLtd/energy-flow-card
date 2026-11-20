@@ -1913,7 +1913,7 @@ export class EnergyFlowView {
     let dark = 0;
     for (let i = 0; i < pixels.length; i += 4) {
       const l = .2126 * linearLight(pixels[i]) + .7152 * linearLight(pixels[i + 1]) + .0722 * linearLight(pixels[i + 2]);
-      if (l < .03) dark++;
+      if (l < .08) dark++;  // the panels, sunlit or not
     }
     return dark * 4 / pixels.length;
   }
@@ -1929,11 +1929,15 @@ export class EnergyFlowView {
       const ink = label.classList.contains("ef-cap") ? .06 : label.querySelector?.(".ef-idle") || label.classList.contains("ef-idle") ? .11
         : share === undefined ? .1 : .011;
       const even = Math.sqrt(.95 * (ink + .05)) - .05;
-      const dark = luminance < even * (on ? 1.15 : 1) || share !== undefined && share > (on ? .2 : .28);
+      const dark = luminance < even * (on ? 1.15 : 1) || share !== undefined && share > (on ? .1 : .15);
+      // Dark ink with only a corner over the panels keeps its ink and gets a soft white haze to lift it off them.
+      const hazed = label.classList.contains("ef-ink-haze");
       label.classList.remove("ef-ink-lifted");
       label.classList.toggle("ef-ink-bright", dark);
+      label.classList.toggle("ef-ink-haze", !dark && share !== undefined && share > (hazed ? .02 : .03));
       return;
     }
+    label.classList.remove("ef-ink-haze");
     const threshold = label.classList.contains("ef-ink-lifted") ? .165 : .18;
     const lifted = luminance > threshold;
     label.classList.toggle("ef-ink-lifted", lifted);
