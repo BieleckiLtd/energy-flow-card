@@ -424,8 +424,8 @@
    blacked out at night, and metallic frames under an overcast night */
 .ef-light [fill="#141414"]{fill:#555a68}
 .ef-light [fill="#0c0c0c"]{fill:#474c5a}
-.ef-light #ef-b1-battery [fill="#161616"]{fill:#737988}
-.ef-light #ef-b2-battery [fill="#18191b"]{fill:#5d6270}
+.ef-light{--ef-b1-body-1:#a9aeb9;--ef-b1-body-2:#8d93a0;--ef-b1-body-3:#6f7584;--ef-b1-body-4:#525764;
+  --ef-b2-body-1:#959aa6;--ef-b2-body-2:#7a808d;--ef-b2-body-3:#5d6270;--ef-b2-body-4:#434753}
 .ef-light [stroke="#0b0b0b"]{stroke:#29314c}
 .ef-light .ef-night-glass{opacity:calc(.25 * var(--ef-darkness,0))}
 .ef-light[data-time=night]:is([data-weather=cloudy],[data-weather=fog],[data-weather=drizzle],[data-weather=rain],[data-weather=heavy],[data-weather=snow],[data-weather=storm]) #ef-panel-frame stop:nth-child(1){stop-color:#7a8094}
@@ -485,6 +485,9 @@
 <linearGradient id="ef-gable" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--ef-gable-1,#272727)"/><stop offset="1" style="stop-color:var(--ef-gable-2,#1c1c1c)"/></linearGradient>
 <linearGradient id="ef-wall" x1="0" y1="0" x2="1" y2="1"><stop offset="0" style="stop-color:var(--ef-wall-1,#0a0a0a)"/><stop offset="1" style="stop-color:var(--ef-wall-2,#0f0f0f)"/></linearGradient>
 <linearGradient id="ef-pane" x1="0" y1="0" x2=".35" y2="1"><stop offset="0" style="stop-color:var(--ef-window-1,#d6d3ca)"/><stop offset="1" style="stop-color:var(--ef-window-2,#aeaba3)"/></linearGradient>
+<!-- battery bodies: lit from above like the charger, lighter at the top and darker towards the floor -->
+<linearGradient id="ef-b1-body" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--ef-b1-body-1,#4a4d52)"/><stop offset=".18" style="stop-color:var(--ef-b1-body-2,#303236)"/><stop offset=".6" style="stop-color:var(--ef-b1-body-3,#1b1c1e)"/><stop offset="1" style="stop-color:var(--ef-b1-body-4,#0c0c0d)"/></linearGradient>
+<linearGradient id="ef-b2-body" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--ef-b2-body-1,#4c4f55)"/><stop offset=".18" style="stop-color:var(--ef-b2-body-2,#323439)"/><stop offset=".6" style="stop-color:var(--ef-b2-body-3,#1d1e21)"/><stop offset="1" style="stop-color:var(--ef-b2-body-4,#0d0e0f)"/></linearGradient>
 <linearGradient id="ef-b1-face" x1="0" y1="0" x2="1" y2="1"><stop offset="0" style="stop-color:var(--ef-b1-face-1,#eeeeee)"/><stop offset="1" style="stop-color:var(--ef-b1-face-2,#cdcdcd)"/></linearGradient>
 <linearGradient id="ef-b1-strip" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--ef-b1-strip-1,#8ac7a7)"/><stop offset="1" style="stop-color:var(--ef-b1-strip-2,#76b698)"/></linearGradient>
 <linearGradient id="ef-b2-face" x1="0" y1="0" x2="1" y2="1"><stop offset="0" style="stop-color:var(--ef-b2-face-1,#4b4e54)"/><stop offset="1" style="stop-color:var(--ef-b2-face-2,#2e3034)"/></linearGradient>
@@ -2760,7 +2763,7 @@
 </g>
 <!-- Battery 1 -->
 <g id="ef-b1-battery">
-<path d="M335 897Q335 894 337.9 893.4L406.1 879.1Q409 878.5 411.7 879.8L417.8 882.7Q420.5 884 420.5 887L420.5 1045Q420.5 1048 417.6 1048.7L352.9 1063.3Q350 1064 347.2 1063L338.8 1060Q336 1059 336 1056Z" fill="#161616"/>
+<path d="M335 897Q335 894 337.9 893.4L406.1 879.1Q409 878.5 411.7 879.8L417.8 882.7Q420.5 884 420.5 887L420.5 1045Q420.5 1048 417.6 1048.7L352.9 1063.3Q350 1064 347.2 1063L338.8 1060Q336 1059 336 1056Z" fill="url(#ef-b1-body)"/>
 <path class="ef-light-only" d="M337.9 894.8Q335 894 337.9 893.4L406.1 879.1Q409 878.5 411.7 879.8L417.8 882.7Q420.5 884 417.6 884.6L352 898.4Z" fill="#d3d7df"/>
 <polygon id="ef-b1-level" data-full="338,1055.7 346.5,1058.8 346.5,902.1 338,899.1" points="338,1055.7 346.5,1058.8 346.5,958.5 338.0,955.5" fill="url(#ef-b1-strip)"/>
 <path d="M352 898.4 420 884.1Q423 883.5 423 886.5L423.5 1044.5Q423.5 1047.5 420.6 1048.2L353 1063.3Q350 1064 350 1061L349 902Q349 899 352 898.4Z" fill="url(#ef-b1-face)"/>
@@ -2770,9 +2773,9 @@
 
 <!-- battery 2 -->
 <g id="ef-b2-battery">
-<path d="M447 890.9Q447 887.9 449.9 887.3L512.1 873.9Q515 873.3 517.7 874.6L523.8 877.5Q526.5 878.8 526.5 881.8L526.5 1021Q526.5 1024 523.6 1024.7L463.9 1038.3Q461 1039 458.2 1038L449.8 1035Q447 1034 447 1031Z" fill="#18191b"/>
+<path d="M447 890.9Q447 887.9 449.9 887.3L512.1 873.9Q515 873.3 517.7 874.6L523.8 877.5Q526.5 878.8 526.5 881.8L526.5 1021Q526.5 1024 523.6 1024.7L463.9 1038.3Q461 1039 458.2 1038L449.8 1035Q447 1034 447 1031Z" fill="url(#ef-b2-body)"/>
 <polygon id="ef-b2-level" data-full="450,1031.1 458,1033.9 458,895.8 450,893" points="450,1031.1 458,1033.9 458.0,967.6 450.0,964.8" fill="url(#ef-b2-strip)"/>
-<path d="M461 895.9Q461 892.9 463.9 892.3L526.1 878.9Q529 878.3 529 881.3L529 1020.8Q529 1023.8 526.1 1024.4L463.9 1038.3Q461 1039 461 1036Z" fill="url(#ef-b2-face)" stroke="#5d6168" stroke-width="1" stroke-opacity=".75"/>
+<path d="M461 895.9Q461 892.9 463.9 892.3L526.1 878.9Q529 878.3 529 881.3L529 1020.8Q529 1023.8 526.1 1024.4L463.9 1038.3Q461 1039 461 1036Z" fill="url(#ef-b2-face)"/>
 <path d="M469 891.2L529 879.4L529 1015.8Z" fill="#fff" opacity=".065"/>
 <g class="ef-snowcap"><path d="M447 888L447 888 448.9 886.3 450.9 885 452.8 884.6 454.8 884.2 456.7 883.7 458.7 883.3 460.6 882.8 462.5 882.4 464.5 881.9 466.4 881.3 468.4 880.5 470.3 879.8 472.3 879.2 474.2 878.8 476.1 878.5 478.1 878.2 480 877.9 482 877.5 483.9 877.1 485.9 876.8 487.8 876.4 489.7 876 491.7 875.6 493.6 875.3 495.6 875 497.5 874.6 499.5 874.2 501.4 873.7 503.3 873.2 505.3 872.8 507.2 872.3 509.2 871.9 511.1 871.6 513.1 872.3 515 873.3L515 873.3Z"/><path d="M461 894.5L461 894.5 462.9 892.2 464.9 890.8 466.8 890.9 468.8 890.8 470.7 890.3 472.7 889.5 474.6 888.6 476.5 887.7 478.5 887.2 480.4 886.8 482.4 886.4 484.3 886 486.3 885.6 488.2 885.3 490.1 885.3 492.1 885.4 494 885.4 496 885 497.9 884.2 499.9 883.2 501.8 882.4 503.7 881.8 505.7 881.5 507.6 881.3 509.6 881.1 511.5 880.8 513.5 880.3 515.4 879.8 517.3 879.3 519.3 878.9 521.2 878.4 523.2 878.3 525.1 878.3 527.1 879.2 529 880L529 880Z"/></g>
 </g>
