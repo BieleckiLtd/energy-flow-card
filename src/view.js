@@ -770,8 +770,8 @@ class PulseRenderer {
     const defs = clone.querySelector("defs");
     const used = new Set([...clone.querySelectorAll("use")].map((u) => u.getAttribute("href")?.slice(1)));
     const kept = all.map((el) => !!el.closest("defs, clipPath, mask, linearGradient, radialGradient, filter, pattern, style"));
-    // what never covers a pipe (a pipe's body lies under its own pulses and never over another's)
-    const never = all.map((el) => el.matches(".ef-flow, .ef-pulse, .ef-lane, #ef-rain, #ef-snow, #ef-labels, .ef-lead, #ef-flash"));
+    // what never covers a pipe (a pipe's body, and the bright edge of a wall line, lie under its own pulses and never over another's)
+    const never = all.map((el) => el.matches(".ef-flow, .ef-pulse, .ef-lane, .ef-line .ef-pipe-shade, #ef-rain, #ef-snow, #ef-labels, .ef-lead, #ef-flash"));
     const pulse = all.map((el) => el.matches(".ef-flow, .ef-pulse"));
     const firsts = this.levels.map((level) => {
       const at = live.indexOf(level.first), holders = new Set();
@@ -1491,10 +1491,21 @@ export class EnergyFlowView {
     const el = this.part(`ef-${name}`);
     el.style.opacity = brightness;
     this.attr(this.part(`ef-${name}-shine`), "opacity", reflection);
+    const coating = this.part(`ef-${name}-coating-glint`);
+    const fold = this.part(`ef-${name}-fold-glint`);
+    this.attr(coating, "opacity", Math.min(1, reflection * 1.28));
+    this.attr(fold, "opacity", Math.min(1, reflection * 1.10));
     if (!body || !brightness) return;
     const { progress, altitude } = body;
     const height = Math.sin(Math.max(0, altitude) * Math.PI / 180);
     const bodyX = skyX(progress);
+    // Project the moving light onto the inclined glass, then onto the lower metal fold.
+    const glintX = bodyX + 117;
+    const glassY = 610 - .202 * glintX - 49 * height;
+    const foldX = glintX + 42;
+    const foldY = 855 - .22334 * foldX;
+    this.attr(coating, "transform", `translate(${glintX} ${glassY})`);
+    this.attr(fold, "transform", `translate(${foldX} ${foldY})`);
     this.attr(el, "transform", `translate(${bodyX} ${125 - height * 89})`);
     // Follow the front array's centre line, with the solar glint just to the right of the disc.
     const solar = name === "sun";
@@ -1531,7 +1542,7 @@ export class EnergyFlowView {
     const moonlightKey = () => moon ? `${Math.round(skyX(moon.progress) / 4)},${Math.round(moon.altitude)}` : "";
     const moonlight = moon ? visibility * (1 - smoothstep(-6, HORIZON, altitude)) * smoothstep(HORIZON, 2, moon.altitude) : 0;
     const moonBrightness = moonlight * Math.min(1, fraction * 45);
-    this.light("moon", moon, moonBrightness, moonlight * fraction ** 1.5 * .75);
+    this.light("moon", moon, moonBrightness, moonlight * fraction ** 1.5 * .2);
     // Snapshots of the picture (heat shimmer, label contrast) are taken again once the sky looks different: the sun
     // or moon a few units on, or the light a step brighter or darker. Coarse enough that a live card, whose sky
     // creeps, re-takes them only every few minutes; a jump in time (the lab's slider) re-takes them at once.

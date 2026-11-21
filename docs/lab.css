@@ -30,8 +30,10 @@ html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
 .lab { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 400px); grid-template-rows: minmax(0, 1fr); gap: 24px;
   height: 100dvh; max-width: 1500px; margin: 0 auto; padding: 16px; }
 .stage { display: grid; place-items: center; align-content: center; gap: 10px; min-height: 0; container-type: size; }
-.stage energy-flow-card { width: min(100cqw, 100cqh * 1170 / 1408); min-width: 240px;
-  border-radius: var(--radius); overflow: hidden; box-shadow: 0 14px 50px rgb(0 0 0 / .45); }
+.stage .zoom { width: min(100cqw, 100cqh * 1170 / 1408); min-width: 240px;
+  border-radius: var(--radius); overflow: hidden; box-shadow: 0 14px 50px rgb(0 0 0 / .45); touch-action: pan-x pan-y; }
+.stage .zoom.zoomed { touch-action: none; cursor: grab; }
+.stage .zoom energy-flow-card { display: block; width: 100%; transform-origin: 50% 50%; will-change: transform; }
 .side { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
 .top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .top h1 { margin: 0; font-size: 20px; font-weight: 650; letter-spacing: -.01em; }
@@ -149,7 +151,7 @@ input[type=date] { width: auto; }
   .side { display: contents; }
   .top { order: 1; }
   .stage { order: 3; container-type: normal; }
-  .stage energy-flow-card { width: min(100%, 560px); }
+  .stage .zoom { width: min(100%, 560px); }
   .mode { order: 2; }
   .clock { order: 4; }
   .sidebar { order: 5; overflow: visible; padding-right: 0; }

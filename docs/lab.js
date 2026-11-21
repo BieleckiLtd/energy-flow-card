@@ -593,6 +593,79 @@
   });
   document.querySelector("[data-open=install]").addEventListener("click", () => { stopShowcase(); $("install").open = true; });
 
+
+  // ---------- pinch to zoom: only the picture (a wrapper clips it); the sidebar and page never zoom ----------
+  (() => {
+    const frame = document.createElement("div");
+    frame.className = "zoom";
+    card.before(frame);
+    frame.append(card);
+    let s = 1, tx = 0, ty = 0;
+    const MAX = 5;
+    const apply = () => {
+      const r = frame.getBoundingClientRect();
+      const lx = (s - 1) * r.width / 2, ly = (s - 1) * r.height / 2;  // how far the picture may travel and still fill the frame
+      tx = Math.max(-lx, Math.min(lx, tx));
+      ty = Math.max(-ly, Math.min(ly, ty));
+      if (s <= 1.001) { s = 1; tx = ty = 0; }
+      card.style.transform = s === 1 ? "" : `translate(${tx}px, ${ty}px) scale(${s})`;
+      frame.classList.toggle("zoomed", s > 1);
+    };
+    // zoom to scale `next`, keeping the picture point under (cx, cy) (client coordinates) where it is
+    const zoomAt = (next, cx, cy) => {
+      next = Math.max(1, Math.min(MAX, next));
+      const r = frame.getBoundingClientRect();
+      const fx = cx - (r.left + r.width / 2), fy = cy - (r.top + r.height / 2);
+      // the frame's centre does not move with the transform, so tx/ty are offsets from it
+      tx = fx - (fx - tx) * next / s;
+      ty = fy - (fy - ty) * next / s;
+      s = next;
+      apply();
+    };
+    // trackpad pinch (and ctrl + wheel) on desktop
+    frame.addEventListener("wheel", (e) => {
+      if (!e.ctrlKey) return;
+      e.preventDefault();
+      zoomAt(s * Math.exp(-e.deltaY * (e.deltaMode ? .05 : .01)), e.clientX, e.clientY);
+    }, { passive: false });
+    // two fingers (and one to move the zoomed picture)
+    const pointers = new Map();
+    let last = null;
+    const pinch = () => {
+      const [a, b] = [...pointers.values()];
+      return { d: Math.hypot(a.x - b.x, a.y - b.y), x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    };
+    frame.addEventListener("pointerdown", (e) => {
+      if (e.pointerType === "mouse" && s === 1) return;
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pointers.size === 2) last = pinch();
+    });
+    frame.addEventListener("pointermove", (e) => {
+      const p = pointers.get(e.pointerId);
+      if (!p) return;
+      const dx = e.clientX - p.x, dy = e.clientY - p.y;
+      p.x = e.clientX; p.y = e.clientY;
+      if (pointers.size === 2) {
+        const now = pinch();
+        if (last && last.d) { tx += now.x - last.x; ty += now.y - last.y; zoomAt(s * now.d / last.d, now.x, now.y); }
+        last = now;
+      } else if (pointers.size === 1 && s > 1) {
+        tx += dx; ty += dy; apply();
+      }
+    });
+    const lift = (e) => { pointers.delete(e.pointerId); last = pointers.size === 2 ? pinch() : null; };
+    frame.addEventListener("pointerup", lift);
+    frame.addEventListener("pointercancel", lift);
+    // Safari (iOS) reports pinches as gesture events and would zoom the whole page
+    let base = 1;
+    frame.addEventListener("gesturestart", (e) => { e.preventDefault(); base = s; });
+    frame.addEventListener("gesturechange", (e) => { e.preventDefault(); zoomAt(base * e.scale, e.clientX, e.clientY); });
+    frame.addEventListener("gestureend", (e) => e.preventDefault());
+    // back to the whole picture
+    frame.addEventListener("dblclick", () => { if (s > 1) { s = 1; apply(); } });
+    window.addEventListener("resize", apply);
+  })();
+
   // ---------- start ----------
   showPlace();
   setClock(12, 0);
