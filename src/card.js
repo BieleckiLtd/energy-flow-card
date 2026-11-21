@@ -23,8 +23,13 @@ const OPEN = ["open", "on"], ON = ["on", "open"];
 export function normalizeConfig(config = {}) {
   const out = { title: config.title || "", weather: config.weather || "", temperature: config.temperature || "", latitude: config.latitude, longitude: config.longitude,
     festive: (config.festive ?? config.christmas) !== false, effects: effectsLevel(config.effects),
-    // light or dark, or auto: Home Assistant's own dark mode (outside it, the device's)
+    // light or dark, or auto: Home Assistant's own dark mode (outside it, the device's). Or an entity (an input_select,
+    // select or input_boolean) whose state says which: light, dark or auto (on = dark).
     theme: ["light", "dark"].includes(config.theme) ? config.theme : "auto",
+    themeEntity: isEntity(config.theme) ? config.theme.trim() : "",
+    // For trying the picture: an entity holding a date and time (input_datetime, or a timestamp sensor) that the sky and
+    // the clock follow instead of now.
+    timeEntity: isEntity(config.time) ? config.time.trim() : "",
     // The garage and the house lights: on or off, or an entity (a cover, switch or light) that says which and that a
     // tap on the shutter or the window toggles. Without one a tap toggles the picture alone.
     garage: [true, 1, "1", "open", "on"].includes(config.garage) ? "open" : "closed",
@@ -166,7 +171,10 @@ export class EnergyFlowCard extends HTMLElement {
   // Light or dark, from the config or (auto) Home Assistant's dark mode. The picture is configured again only when it
   // changes; true when it did.
   applyTheme() {
-    const theme = this.config.theme, dark = this._hass?.themes?.darkMode;
+    let theme = this.config.theme;
+    const chosen = this.config.themeEntity && this._hass?.states[this.config.themeEntity]?.state;
+    if (chosen) theme = chosen === "on" ? "dark" : chosen === "off" ? "light" : ["light", "dark"].includes(String(chosen).toLowerCase()) ? String(chosen).toLowerCase() : "auto";
+    const dark = this._hass?.themes?.darkMode;
     const light = theme === "auto" ? (typeof dark === "boolean" ? !dark : !!this.scheme?.matches) : theme === "light";
     if (light === this.light) return false;
     this.light = light;
@@ -176,6 +184,13 @@ export class EnergyFlowCard extends HTMLElement {
     this.shadowRoot.querySelector(".card").classList.toggle("light", light);
     this.view.configure(cfg);
     return true;
+  }
+
+  // Now, or the moment the `time` entity holds (its own states are local time, as input_datetime's are).
+  now() {
+    const s = this.config.timeEntity && this._hass?.states[this.config.timeEntity]?.state;
+    const t = s ? new Date(/^\d{4}-\d\d-\d\d \d/.test(s) ? s.replace(" ", "T") : s).getTime() : NaN;
+    return Number.isFinite(t) ? t : Date.now();
   }
 
   // The sky moves on even when no sensor changes.
@@ -208,7 +223,7 @@ export class EnergyFlowCard extends HTMLElement {
   // In the festive season a tap on the window steps through three: all on, the decorations off with the room still lit,
   // everything off. The decorations show only with the lights on, and then light up after sunset by themselves.
   tapWindow() {
-    const time = this.previewState?.time ?? Date.now();
+    const time = this.previewState?.time ?? this.now();
     if (!this.config.festive || !christmasSeason(time)) { this.toggle("lights"); return; }
     const lights = this.switchedOn("lights"), decorations = this.local.decorations ?? true;
     const next = lights && decorations ? [true, false] : lights ? [false, false] : [true, true];
@@ -285,9 +300,9 @@ export class EnergyFlowCard extends HTMLElement {
       battery1: { power: this.signed(cfg.battery1, "power", "discharge", "charge"), soc: this.number(cfg.battery1.soc) },
       battery2: { power: this.signed(cfg.battery2, "power", "discharge", "charge"), soc: this.number(cfg.battery2.soc) },
       weather: HA_WEATHER[weatherState] || (cfg.weather ? "cloudy" : "clear"),
-      sky: Number.isFinite(latitude) && Number.isFinite(longitude) ? energySky(latitude, longitude, Date.now()) : null,
+      sky: Number.isFinite(latitude) && Number.isFinite(longitude) ? energySky(latitude, longitude, this.now()) : null,
       temperature: this.celsius(),
-      time: Date.now(),
+      time: this.now(),
     };
   }
 
