@@ -295,22 +295,14 @@
 .ef-light [fill="url(#ef-gable-shade)"]{opacity:.16}
 .ef-light [fill="#111215"],.ef-light [fill="#101113"]{opacity:.28}
 .ef-light{--ef-door-seam-width:2}
-/* Match the middle row divider of the light-mode foreground grid. */
-.ef-light .ef-front-cell-grain{transform:matrix(1,-0.19712293,0,1.00309503,0,673.79945086)}
 .ef-light [style*="--ef-roof-ridge"]{stroke-opacity:.52}
 .ef-light [fill="url(#ef-roof)"]{fill:url(#ef-roof-enamel)}
-/* The frame sits 27, 33, 48 and 57 units inside the ridge, right rake, eave and left rake.
-   The glass has a 5.4-unit rim. Rows follow the ridge and columns the left rake. */
+/* Both themes share the panel faces. The light frames have five units of depth. */
 .ef-light{
-  --ef-front-frame-d:path("M147.714 518.806 745.388 400.991 911.399 612.139 315.591 745.208Z");
-  --ef-front-edge-d:path("M147.714 518.806 315.591 745.208 911.399 612.139 911.399 617.139 315.591 750.208 147.714 523.806Z");
-  --ef-front-glass-d:path("M157.14 522.452 743.187 406.929 901.855 608.737 317.839 739.173Z");
-  --ef-front-cell-seams-d:path("M255.471 503.069 414.529 717.578M353.802 483.686 511.22 695.983M452.133 464.302 607.911 674.388M550.464 444.919 704.601 652.793M648.795 425.536 801.292 631.197M196.077 574.962 784.157 459.038M235.013 627.473 825.127 511.148M273.949 679.983 866.098 563.257");
+  --ef-front-edge-d:path("M143 518 317 742 914 614 914 619 317 747 143 523Z");
   --ef-back-edge-d:path("M-100 296 62 499 633 394 633 399 62 504 -100 301Z");
   --ef-back-array-shadow-d:path("M-101 303 482 209 632 401 61 506Z");
 }
-.ef-light .ef-front-upper-snow{transform:matrix(1.00350505,-0.00945706,0,1,-2.41695263,5.95560932)}
-.ef-light .ef-front-array-snow{transform:matrix(1.00346542,-0.01277671,0,1,-5.27726606,9.28753029)}
 .ef-light [fill="url(#ef-panel-edge)"]{filter:brightness(.56)}
 .ef-light .ef-panel-side[fill]{filter:brightness(.76)}
 .ef-light :is(#ef-b1-battery,#ef-b2-battery){filter:drop-shadow(-3px 2.4px 2.4px rgb(16 17 24/.26))}
@@ -554,7 +546,6 @@
 .ef-light.ef-lights-off:not([data-time=night]) [fill="#0c0c0c"]{fill:#727472}
 .ef{--ef-b1-body-top:#2b2d31;--ef-b1-body-rim:#585b61;--ef-b1-body-side:#161616;--ef-b2-body-top:#2d2f33;--ef-b2-body-rim:#5a5d63;--ef-b2-body-side:#18191b}
 .ef-light{--ef-b1-body-top:#d3d7df;--ef-b1-body-rim:#e3e6eb;--ef-b1-body-side:#737988;--ef-b2-body-top:#b4b8c1;--ef-b2-body-rim:#c9ccd3;--ef-b2-body-side:#5d6270}
-.ef-light [stroke="#0b0b0b"]{stroke:#29314c}
 .ef-light[data-time=night]:is([data-weather=cloudy],[data-weather=fog],[data-weather=drizzle],[data-weather=rain],[data-weather=heavy],[data-weather=snow],[data-weather=storm]) #ef-panel-frame stop:nth-child(1){stop-color:#7a8094}
 .ef-light[data-time=night]:is([data-weather=cloudy],[data-weather=fog],[data-weather=drizzle],[data-weather=rain],[data-weather=heavy],[data-weather=snow],[data-weather=storm]) #ef-panel-frame stop:nth-child(2){stop-color:#6c7286}
 .ef-light[data-time=night]:is([data-weather=cloudy],[data-weather=fog],[data-weather=drizzle],[data-weather=rain],[data-weather=heavy],[data-weather=snow],[data-weather=storm]) #ef-panel-frame stop:nth-child(3){stop-color:#5f6579}
@@ -664,7 +655,7 @@
      M-120 54H950M-120 66H950M-120 72H950M-120 78H950M-120 84H950M-120 90H950M-120 96H950M-120 102H950
      M-120 108H950M-120 114H950M-120 120H950M-120 126H950M-120 132H950M-120 138H950M-120 144H950M-120 150H950"/>
 <path id="ef-back-glass" d="M-85.6 296 481 208 625 391.5 67.5 492.5Z"/>
-<path id="ef-front-glass" d="M159 518 743 408 904 611 322 734Z" style="d:var(--ef-front-glass-d,revert-layer)"/>
+<path id="ef-front-glass" d="M159 518 743 408 904 611 322 734Z"/>
 <clipPath id="ef-back-glass-clip"><use href="#ef-back-glass"/></clipPath>
 <clipPath id="ef-front-glass-clip"><use href="#ef-front-glass"/></clipPath>
 <filter id="ef-optical-blur" x="-2%" y="-2%" width="104%" height="104%"><feGaussianBlur stdDeviation=".42"/></filter>
@@ -3101,7 +3092,7 @@
 <path d="M63.5 508.5 282 804" fill="none" style="stroke:var(--ef-roof-line,#1b1b1b)" stroke-width="1.3"/>
 <path d="M286 801 980 646 980 652.5 288 808Z" style="fill:var(--ef-fascia,#141414)"/>
 <path d="M68 507 763 370 980 646 286 801Z" fill="url(#ef-roof)"/>
-<path class="ef-light-only ef-front-array-shadow" d="M146.714 525.806 744.388 407.991 910.399 619.139 314.591 752.208Z" fill="#090d1c" opacity=".48" filter="url(#ef-array-shadow)"/>
+<path class="ef-light-only ef-front-array-shadow" d="M142 525 744 409 913 621 316 749Z" fill="#090d1c" opacity=".48" filter="url(#ef-array-shadow)"/>
 <g class="ef-frost"><path d="M68 507 763 370 980 646 286 801Z" fill="url(#ef-frost-roof)" filter="url(#ef-frost-ice)"/></g>
 <path d="M286 801 980 646 763 370" fill="none" style="stroke:var(--ef-roof-ridge,#3a3a3a)" stroke-width="1.4"/>
 <path d="M68 507 763 370" fill="none" style="stroke:var(--ef-roof-line,#1a1a1a)" stroke-width="1.5"/>
@@ -3290,21 +3281,21 @@
 <g class="ef-bake ef-front-array">
 <path class="ef-dark-only" d="M142 522 745 404 920 627 318 757Z" fill="#101113" opacity=".65"/>
 <path d="M143 518 317 742 914 614 913 623 318 751 143 526Z" style="d:var(--ef-front-edge-d,revert-layer)" fill="url(#ef-panel-edge)"/>
-<path class="ef-light-only ef-panel-side" d="M147.714 518.806 315.591 745.208 315.591 750.208 147.714 523.806Z" fill="url(#ef-panel-edge)"/>
-<path d="M143 518 745 402 914 614 317 742Z" style="d:var(--ef-front-frame-d,revert-layer)" fill="url(#ef-panel-frame)"/>
+<path class="ef-light-only ef-panel-side" d="M143 518 317 742 317 747 143 523Z" fill="url(#ef-panel-edge)"/>
+<path d="M143 518 745 402 914 614 317 742Z" fill="url(#ef-panel-frame)"/>
 <path class="ef-dark-only" d="M143 518 745 402 914 614 317 742Z" fill="none" stroke="#646464" stroke-opacity=".48" stroke-width="1.9"/>
 <use href="#ef-front-glass" fill="url(#ef-cells)" stroke="#0b0b0b" stroke-width="3.4"/>
 <use href="#ef-front-glass" class="ef-night-glass"/>
 <g clip-path="url(#ef-front-glass-clip)">
   <use href="#ef-sun-shine"/>
   <use href="#ef-moon-shine"/>
-  <use class="ef-front-cell-grain" href="#ef-cell-grain" transform="matrix(1,-0.19914015,0,1.02841316,0,671.17329321)"/>
-  <path id="ef-front-cell-seams" d="M264.4 497.8L421.2 713M365.6 478.8L522.4 691.6M463.3 460.5L620.1 671M558.7 442.6L715.5 650.8M652.3 425L810.2 630.8M200.4 569.1L781.6 456.7M240.4 623.3L821.9 507.5M282 679.8L863.8 560.2" style="d:var(--ef-front-cell-seams-d,revert-layer)" fill="none"/>
+  <use href="#ef-cell-grain" transform="matrix(1,-0.19914015,0,1.02841316,0,671.17329321)"/>
+  <path id="ef-front-cell-seams" d="M264.4 497.8L421.2 713M365.6 478.8L522.4 691.6M463.3 460.5L620.1 671M558.7 442.6L715.5 650.8M652.3 425L810.2 630.8M200.4 569.1L781.6 456.7M240.4 623.3L821.9 507.5M282 679.8L863.8 560.2" fill="none"/>
   <use href="#ef-front-cell-seams" stroke="#5a6382" stroke-width="6" opacity=".32"/>
   <use href="#ef-front-cell-seams" stroke="#0a0c14" stroke-width="4"/>
 </g>
 <g class="ef-frost" clip-path="url(#ef-front-glass-clip)"><use href="#ef-front-glass" fill="url(#ef-frost-sheet)" filter="url(#ef-frost-ice)"/></g>
-<g class="ef-snowcap" clip-path="url(#ef-front-glass-clip)"><path class="ef-front-array-snow" d="M322 734L322 734 336 727 351.7 722.2 367.4 717.6 383.4 713.2 399.6 709 415.5 704.6 431.4 700.1 447.4 695.7 463.7 691.8 480.4 688.4 497.6 685.6 514.8 682.8 531.6 679.6 548.1 675.9 564.3 671.8 580.5 667.7 596.8 663.8 613.5 660.3 630.7 657.7 648.3 655.4 665.8 653 682.7 649.9 699.1 646 715.1 641.8 731.2 637.6 747.7 633.8 764.6 630.6 781.6 627.7 798.7 624.8 815.8 621.9 832.8 618.9 850 616.1 867.4 613.6 884.9 611.2 904 611L904 611Z"/><path class="ef-front-upper-snow" d="M159 518L159 518 176.6 516 194 513.9 210.8 510.9 227.5 507.8 244.2 504.7 261 501.6 277.7 498.5 294.4 495.4 311.1 492.3 327.8 489.1 344.4 485.9 361 482.7 377.7 479.5 394.3 476.3 411 473.1 427.6 469.9 444.2 466.7 460.9 463.5 477.7 460.4 494.4 457.4 511.2 454.4 527.9 451.2 544.6 448.1 561.3 445 578 441.8 594.6 438.7 611.3 435.5 627.9 432.2 644.4 428.8 660.9 425.5 677.6 422.4 694.4 419.4 711.3 416.5 727.4 412.6 743 408L743 408Z"/></g>
+<g class="ef-snowcap" clip-path="url(#ef-front-glass-clip)"><path d="M322 734L322 734 336 727 351.7 722.2 367.4 717.6 383.4 713.2 399.6 709 415.5 704.6 431.4 700.1 447.4 695.7 463.7 691.8 480.4 688.4 497.6 685.6 514.8 682.8 531.6 679.6 548.1 675.9 564.3 671.8 580.5 667.7 596.8 663.8 613.5 660.3 630.7 657.7 648.3 655.4 665.8 653 682.7 649.9 699.1 646 715.1 641.8 731.2 637.6 747.7 633.8 764.6 630.6 781.6 627.7 798.7 624.8 815.8 621.9 832.8 618.9 850 616.1 867.4 613.6 884.9 611.2 904 611L904 611Z"/><path d="M159 518L159 518 176.6 516 194 513.9 210.8 510.9 227.5 507.8 244.2 504.7 261 501.6 277.7 498.5 294.4 495.4 311.1 492.3 327.8 489.1 344.4 485.9 361 482.7 377.7 479.5 394.3 476.3 411 473.1 427.6 469.9 444.2 466.7 460.9 463.5 477.7 460.4 494.4 457.4 511.2 454.4 527.9 451.2 544.6 448.1 561.3 445 578 441.8 594.6 438.7 611.3 435.5 627.9 432.2 644.4 428.8 660.9 425.5 677.6 422.4 694.4 419.4 711.3 416.5 727.4 412.6 743 408L743 408Z"/></g>
 
 
 </g>
