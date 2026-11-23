@@ -99,7 +99,9 @@ export class EnergyFlowCard extends HTMLElement {
     this.config = normalizeConfig({});
     // auto outside Home Assistant (the lab): the device's light or dark setting
     this.scheme = window.matchMedia?.("(prefers-color-scheme: light)");
-    this.scheme?.addEventListener?.("change", () => { if (this.applyTheme()) this.render(); });
+    // Listened to only while on the page: a query with a listener is never collected, and would keep every card
+    // ever made (the editor makes them anew), picture and all (issue #3).
+    this.onScheme = () => { if (this.applyTheme()) this.render(); };
   }
 
   // Home Assistant wraps cards in <ha-card> for the theme's shadow and radius; outside it we keep our own box.
@@ -112,6 +114,8 @@ export class EnergyFlowCard extends HTMLElement {
       card.replaceWith(haCard);
     }
     clearTimeout(this.leaving);
+    this.scheme?.addEventListener?.("change", this.onScheme);
+    this.applyTheme();  // the device's setting may have changed while the card was off the page
     if (this._hass) this.startClock();
     if (this.view.suspended) this.view.resume();
     // The readings that came in before it was on the page. Inside a fresh <ha-card> the picture is not drawn (no slot
@@ -127,6 +131,7 @@ export class EnergyFlowCard extends HTMLElement {
     this.readingsFrame = 0;
     clearInterval(this.clock);
     this.clock = null;
+    this.scheme?.removeEventListener?.("change", this.onScheme);
     this.view.suspend();
     // Moved on the dashboard or back on a view switch, it carries on as it was. Still off the page after a while, it
     // was thrown away (the editor makes cards anew): its GPU memory goes at once, which older devices need.
