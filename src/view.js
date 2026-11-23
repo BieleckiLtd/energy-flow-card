@@ -1,8 +1,9 @@
+export { dashPattern } from "./pulse-painter.js";
+import { compileProgram, PULSE_BOX, PULSE_SPEED, PulsePainter } from "./pulse-painter.js";
 // The picture of the house and what it does: readings in, moving pulses, labels, sky and weather out.
 // One view per card. It owns the inlined SVG and updates it in place, so its animations run on between updates.
 
 const FLOW_MIN = 50;  // watts: less than this reads as "0 kW" and draws no flow
-const PULSE_SPEED = 125;  // SVG units per second on every wire
 const SHORTEST_CYCLE = 275;  // very short routes should not flash rapidly
 const LANE_FADE = 700;  // ms: a lane going away has faded (.ef-line's .55 s slide and .4 s fade in the svg)
 const LANE_GAP = 19;  // between neighbouring lanes on the wall, in the picture's own units
@@ -165,6 +166,7 @@ const SHIMMER_FRAGMENT = `precision highp float;
 varying vec2 v;
 uniform sampler2D u_a,u_b;
 uniform float u_mix,u_t,u_scale;
+uniform vec2 u_cableStart;
 const vec2 SIZE=vec2(1170.,1408.);
 vec2 hash(vec2 p){p=vec2(dot(p,vec2(127.1,311.7)),dot(p,vec2(269.5,183.3)));return fract(sin(p)*43758.5453)*2.-1.;}
 float noise(vec2 p){vec2 i=floor(p),f=fract(p),u=f*f*(3.-2.*f);
@@ -174,6 +176,8 @@ float fbm(vec2 p){return noise(p)+.5*noise(p*2.+vec2(17.3,5.9));}
 void main(){
   vec2 p=v*SIZE;
   float fade=1.-clamp((p.y-560.)/200.,0.,1.);  // only the sky and roofs shimmer: from the eaves down it fades out
+  // The live cable meets the lower frame here. Keep the contact steady as the surrounding roof shimmers.
+  fade*=smoothstep(20.,42.,distance(p,u_cableStart));
   vec2 d=vec2(0.);
   if(fade>0.){
     vec2 q=vec2(p.x*.011,(p.y+u_t*75.)*.042);  // stretched sideways, rising 75 units a second
@@ -238,6 +242,8 @@ class HeatShimmer {
     gl.enableVertexAttribArray(a);
     gl.vertexAttribPointer(a, 2, gl.FLOAT, false, 0, 0);
     this.u = Object.fromEntries(["u_a", "u_b", "u_mix", "u_t", "u_scale"].map((n) => [n, gl.getUniformLocation(program, n)]));
+    const cableStart = this.svg.getElementById("ef-route-solar-eave").getPointAtLength(0);
+    gl.uniform2f(gl.getUniformLocation(program, "u_cableStart"), cableStart.x, cableStart.y);
     gl.uniform1i(this.u.u_a, 0);
     gl.uniform1i(this.u.u_b, 1);
     this.textures = [0, 1].map(() => {
@@ -318,7 +324,7 @@ class HeatShimmer {
 
   // A new snapshot, once things settle, if the still parts look any different.
   refresh() {
-    if (this.failed || !this.canvas.width) return;
+    if (this.failed || !this.canvas.width || !this.svg.classList.contains("ef-hot")) return;
     if (this.markup && this.key === this.view.stillKey() && performance.now() - this.snapAt < RESAMPLE) return;
     this.dirty = true;
     if (this.busy || (this.shown && !this.running())) return;
@@ -418,7 +424,7 @@ function positioned(el) {
   if (!/^(relative|absolute|fixed|sticky)$/.test(getComputedStyle(el).position)) el.style.position = "relative";
 }
 
-function fitCanvas(canvas, svg, cap = Infinity) {
+function fitCanvas(canvas, svg, cap = Infinity, maxWidth = 2048) {
   const parent = canvas.offsetParent;
   if (!parent) return null;
   const box = svg.getBoundingClientRect(), host = parent.getBoundingClientRect();
@@ -432,76 +438,10 @@ function fitCanvas(canvas, svg, cap = Infinity) {
   const pw = parent.clientWidth || host.width, ph = parent.clientHeight || host.height;
   const pct = (v, of) => `${(v / of * 100).toFixed(4)}%`;
   Object.assign(canvas.style, { left: pct(left, pw), top: pct(top, ph), width: pct(width, pw), height: pct(height, ph) });
-  const density = Math.min(devicePixelRatio || 1, cap, 2048 / width);
+  const density = Math.min(devicePixelRatio || 1, cap, maxWidth / width);
   return { w: Math.round(width * density), h: Math.round(height * density) };
 }
 
-function compileProgram(gl, vertex, fragment) {
-  const shader = (type, source) => {
-    const s = gl.createShader(type);
-    gl.shaderSource(s, source);
-    gl.compileShader(s);
-    return gl.getShaderParameter(s, gl.COMPILE_STATUS) ? s : null;
-  };
-  const vs = shader(gl.VERTEX_SHADER, vertex), fs = shader(gl.FRAGMENT_SHADER, fragment);
-  if (!vs || !fs) return null;
-  const program = gl.createProgram();
-  gl.attachShader(program, vs);
-  gl.attachShader(program, fs);
-  gl.linkProgram(program);
-  return gl.getProgramParameter(program, gl.LINK_STATUS) ? program : null;
-}
-
-// Energy pulses on the GPU. In the svg each pulse is ~50 stacked dashes that all end at its head, so their opacities
-// add up to a smooth tail; moving 918 of them by CSS made the browser restyle every one on every frame, which phones
-// and tablets could not keep up with. Here each piece of a pulse is one strip along its route, and the shader works
-// out the same stacked dashes per pixel from the beat. The canvas sits over the picture; what the svg draws over
-// the pulses (meter box, panels, batteries, pipe edges, fog...) is rasterized into masks that cut them out again.
-const DASHES = 52;  // dashes read per piece (the svg has 51)
-// The stacked dashes repeat along the route, so their coverage over one period is worked out once per piece (after a
-// reading, or when the canvas changes size) into a 1-pixel-high texture: each pixel then reads one value instead of
-// adding up every dash. The strip's long edges are smoothed here too (a_out: -1 left edge, 1 right edge, pushed out by
-// a pixel), so the canvas needs no multisampling.
-const PULSE_VERTEX = `attribute vec2 a_pos,a_n,a_e;attribute float a_s,a_out;
-uniform mat3 u_m;uniform float u_aa;varying float v_s;varying vec2 v_svg,v_e;
-void main(){float o=u_aa;vec3 p=u_m*vec3(a_pos+a_n*a_out*o,1.);v_svg=p.xy;v_s=a_s;v_e=a_e+vec2(a_out,-a_out)*o;
-gl_Position=vec4(p.x/585.-1.,1.-p.y/704.,0.,1.);}`;
-const PULSE_FRAGMENT = `precision highp float;
-uniform float u_shift,u_period,u_aa,u_alpha,u_clipOn;
-uniform vec3 u_color;
-uniform vec2 u_clip[4];
-uniform vec4 u_box;
-uniform sampler2D u_mask,u_pattern;
-varying float v_s;varying vec2 v_svg,v_e;
-float edge(vec2 a,vec2 b){vec2 d=normalize(b-a);return (v_svg-a).y*d.x-(v_svg-a).x*d.y;}
-void main(){
-  float a=texture2D(u_pattern,vec2(fract((v_s+u_shift)/u_period),.5)).a*u_alpha;
-  a*=clamp(min(v_e.x,v_e.y)/u_aa+.5,0.,1.);
-  if(u_clipOn>0.){
-    float d=min(min(edge(u_clip[0],u_clip[1]),edge(u_clip[1],u_clip[2])),min(edge(u_clip[2],u_clip[3]),edge(u_clip[3],u_clip[0])));
-    a*=clamp(d/u_aa+.5,0.,1.);
-  }
-  a*=1.-texture2D(u_mask,(v_svg-u_box.xy)/u_box.zw).a;
-  gl_FragColor=vec4(u_color*a,a);
-}`;
-// One piece's dashes over one period, as alpha: what the shader worked out per pixel before (a dash of length L
-// starts lead*L ahead of the beat, its ends smoothed over aa), sampled finely enough for the texture's linear filter.
-export function dashPattern(lengths, opacities, lead, period, aa, size) {
-  const out = new Uint8Array(size), dashes = [];
-  for (let i = 0; i < lengths.length; i++) if (opacities[i] > 0) dashes.push([lengths[i], opacities[i]]);
-  for (let k = 0; k < size; k++) {
-    const x = (k + .5) / size * period;
-    let keep = 1;
-    for (const [L, o] of dashes) {
-      const u = ((x + lead * L) % period + period) % period;
-      const c = Math.max(Math.min(Math.max(Math.min(u, L - u) / aa + .5, 0), 1), Math.min(Math.max((u - period) / aa + .5, 0), 1));
-      keep *= 1 - o * c;
-    }
-    out[k] = Math.round((1 - keep) * 255);
-  }
-  return out;
-}
-const PULSE_BOX = [0, 640, 1000, 520];  // x, y, width, height: where pulses can be, in the picture's units
 const MASK_WAIT = 700;  // ms after a change before the masks are drawn again (lanes slide for .55 s)
 const CONFIG_SETTLE = 400;  // ms without a config change before the picture is sampled again
 class PulseRenderer {
@@ -513,45 +453,47 @@ class PulseRenderer {
     const canvas = this.canvas = document.createElement("canvas");
     canvas.setAttribute("aria-hidden", "true");
     canvas.style.cssText = "position:absolute;pointer-events:none;visibility:hidden";
-    const gl = this.gl = canvas.getContext("webgl", { alpha: true, premultipliedAlpha: true, antialias: false, depth: false, stencil: false });
-    if (!gl || gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_VECTORS) < 16 || !this.build()) { this.failed = true; return; }
-    canvas.addEventListener("webglcontextlost", (e) => { e.preventDefault(); this.destroy(); });
+    this.width = this.height = 0;
+    if (view.level === "low" && !view.workerFailed && canvas.transferControlToOffscreen && typeof Worker === "function" && typeof createImageBitmap === "function") {
+      let url;
+      try {
+        url = URL.createObjectURL(new Blob([view.pulseWorkerSource], { type: "text/javascript" }));
+        this.worker = new Worker(url);
+        this.worker.onerror = (event) => { event.preventDefault(); this.workerFallback(); };
+        this.worker.onmessage = ({ data }) => { if (data === "lost") this.workerFallback(); };
+        const surface = canvas.transferControlToOffscreen();
+        this.worker.postMessage({ type: "init", surface, profile: view.pulseProfile }, [surface]);
+      } catch {
+        this.worker?.terminate();
+        this.worker = null;
+        view.workerFailed = true;
+      } finally { if (url) URL.revokeObjectURL(url); }
+    }
+    if (!this.worker) {
+      try { this.painter = new PulsePainter(canvas, view.pulseProfile); }
+      catch { this.failed = true; return; }
+      canvas.addEventListener("webglcontextlost", (e) => { e.preventDefault(); this.destroy(); });
+    }
     this.frame = (now) => {
       this.raf = 0;
+      const start = performance.now();
       this.draw(now);
-      if (this.view.pulsesRun()) this.next();
+      if (!this.worker && this.view.pulsesRun() && this.hasShown) this.next(start);
     };
+    this.routeCache = new Map();
     this.pieces = this.findPieces();
+    this.pieces.forEach((piece, id) => { piece.id = id; });
+    this.levels.forEach((level, id) => { level.id = id; });
     this.resizer = typeof ResizeObserver === "function" ? new ResizeObserver(() => this.place()) : null;
   }
 
-  build() {
-    const gl = this.gl, program = compileProgram(gl, PULSE_VERTEX, PULSE_FRAGMENT);
-    if (!program) return false;
-    gl.useProgram(program);
-    this.a = {};
-    for (const n of ["pos", "n", "e", "s", "out"]) { this.a[n] = gl.getAttribLocation(program, `a_${n}`); gl.enableVertexAttribArray(this.a[n]); }
-    this.u = {};
-    for (const n of ["u_m", "u_shift", "u_period", "u_aa", "u_alpha", "u_clipOn", "u_color", "u_clip", "u_box", "u_mask", "u_pattern"]) {
-      this.u[n] = gl.getUniformLocation(program, n);
-    }
-    gl.uniform1i(this.u.u_mask, 0);
-    gl.uniform1i(this.u.u_pattern, 1);
-    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
-    this.maxPattern = Math.min(4096, gl.getParameter(gl.MAX_TEXTURE_SIZE) || 2048);
-    gl.enable(gl.BLEND);
-    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-    this.blank = this.texture(new Uint8Array([0, 0, 0, 0]));
-    return true;
-  }
-
-  texture(pixel) {
-    const gl = this.gl, t = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D, t);
-    for (const p of [gl.TEXTURE_WRAP_S, gl.TEXTURE_WRAP_T]) gl.texParameteri(gl.TEXTURE_2D, p, gl.CLAMP_TO_EDGE);
-    for (const p of [gl.TEXTURE_MIN_FILTER, gl.TEXTURE_MAG_FILTER]) gl.texParameteri(gl.TEXTURE_2D, p, gl.LINEAR);
-    if (pixel) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
-    return t;
+  workerFallback() {
+    if (this.dead) return;
+    const view = this.view;
+    view.workerFailed = true;
+    this.destroy();
+    view.pulses = null;
+    if (!view.suspended && view.svg.isConnected) view.updatePulses();
   }
 
   // Every group of stacked dashes is one piece: same route, frame, colour and width.
@@ -574,27 +516,29 @@ class PulseRenderer {
       }
     }
     this.levels = [...levels.values()];
-    for (const piece of pieces) this.measure(piece);
     return pieces;
   }
 
-  // Fixed per piece: the route as a strip, the dashes' lengths and opacities, the clip.
-  measure(piece) {
-    const gl = this.gl, style = (el) => getComputedStyle(el);
-    const lengths = new Float32Array(DASHES), opacities = new Float32Array(DASHES);
-    piece.dashes.slice(0, DASHES).forEach((dash, i) => {
-      lengths[i] = parseFloat(style(dash).getPropertyValue("--ef-length")) || 0;
-      opacities[i] = parseFloat(style(dash).opacity) || 0;
-    });
-    piece.lengths = lengths;
-    piece.opacities = opacities;
-    piece.width = parseFloat(style(piece.dashes[0]).strokeWidth) || 1;
-    const route = piece.route, total = route.getTotalLength(), steps = Math.max(2, Math.ceil(total / 2));
+  // Sampled points along a route, cached so pieces sharing a route reuse the same SVG path measurements.
+  routePoints(route) {
+    let cached = this.routeCache.get(route);
+    if (cached) return cached;
+    const total = route.getTotalLength(), steps = Math.max(2, Math.ceil(total / 3));
     const points = [];
     for (let i = 0; i <= steps; i++) {
       const s = total * i / steps, p = route.getPointAtLength(s);
       points.push({ x: p.x, y: p.y, s });
     }
+    cached = { total, points };
+    this.routeCache.set(route, cached);
+    return cached;
+  }
+
+  // Fixed per piece: the route as a strip, the dashes' lengths and opacities, the clip. Measured lazily when shown.
+  measure(piece) {
+    // Read strokeWidth from piece.group (never display:none), not piece.dashes[0]: Safari 15 returns "" -> 1px on display:none <use>.
+    piece.width = parseFloat(getComputedStyle(piece.group).strokeWidth) || 1;
+    const { total, points } = this.routePoints(piece.route);
     // Across the stroke: its two edges, or more columns where the head turns into a face that is cut on a slant
     // (data-head-skew="offset:lead ...", offsets across the stroke on the route's left-hand normal, leads in route
     // units, reached over the last data-head-ramp units). The grid riser's head leans that way through its bend,
@@ -622,11 +566,10 @@ class PulseRenderer {
         data.push(...a, ...b, ...c, ...b, ...d, ...c);
       }
     }
-    piece.buffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, piece.buffer);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(data), gl.STATIC_DRAW);
-    piece.count = data.length / 8;
-    piece.patternKey = null;  // lengths and opacities may have changed
+    const vertices = new Float32Array(data);
+    if (this.worker) this.worker.postMessage({ type: "geometry", id: piece.id, vertices }, [vertices.buffer]);
+    else this.painter.geometry(piece.id, vertices);
+    piece.measured = true;
     piece.clip = null;
     const shape = piece.clipHost && this.svg.getElementById(piece.clipHost.getAttribute("clip-path").match(/#([^)"']+)/)?.[1])?.firstElementChild;
     if (shape) {
@@ -677,19 +620,16 @@ class PulseRenderer {
       for (let el = piece.group; shown && el && el !== this.svg; el = el.parentNode) if (getComputedStyle(el).display === "none") shown = false;
       piece.shown = shown;
       if (!shown) continue;
-      // Measured while the picture had no styles (not drawn yet): measured again now that it runs.
-      if (!piece.lengths.some(Boolean)) {
-        this.gl.deleteBuffer(piece.buffer);
-        this.measure(piece);
-        if (!piece.lengths.some(Boolean)) { piece.key = null; piece.shown = false; continue; }  // still nothing: next reading
-      }
+      if (!piece.measured) this.measure(piece);
       const turns = Number(flow.style.getPropertyValue("--ef-turns")) || 1;
       piece.lead = way === "in" ? 0 : 1;
       piece.direction = way === "in" ? 1 : -1;
       piece.period = cd * turns;
-      piece.fixed = -(parseFloat(getComputedStyle(piece.dashes[0]).getPropertyValue("--ef-junction")) || 0)
+      // Read --ef-junction and stroke from piece.group (never display:none), not piece.dashes[0] (hidden by .ef-gl).
+      const gs = getComputedStyle(piece.group);
+      piece.fixed = -(parseFloat(gs.getPropertyValue("--ef-junction")) || 0)
         + (Number(flow.style.getPropertyValue("--ef-turn")) || 0) * cd;
-      piece.color = this.rgb(getComputedStyle(piece.dashes[0]).stroke);
+      piece.color = this.rgb(gs.stroke);
       piece.matrix = this.toPicture(piece.group);
       if (!piece.matrix) piece.shown = false;
       // taken where the lane is now, which may be the start of its slide: drawn frames take it again (below)
@@ -702,6 +642,9 @@ class PulseRenderer {
       this.svg.after(this.canvas);  // over the picture
       this.resizer?.observe(this.svg);
     }
+    this.hasShown = this.pieces.some((p) => p.shown);
+    this.svg.classList.remove("ef-no-gl");
+    this.svg.classList.add("ef-gl");
     if (changed) this.place();
     this.scheduleMasks();
     this.sync();
@@ -720,23 +663,29 @@ class PulseRenderer {
 
   place() {
     if (this.failed || !this.canvas.isConnected) return;
-    const size = fitCanvas(this.canvas, this.svg, this.view.densityCap);
-    if (!size || (size.w === this.canvas.width && size.h === this.canvas.height)) return;
-    this.canvas.width = size.w;
-    this.canvas.height = size.h;
-    this.gl.viewport(0, 0, size.w, size.h);
+    const maxWidth = LEVELS[this.view.level]?.maxWidth ?? 2048;
+    const size = fitCanvas(this.canvas, this.svg, this.view.densityCap, maxWidth);
+    if (!size || !size.w || !size.h || (size.w === this.width && size.h === this.height)) return;
+    this.width = size.w;
+    this.height = size.h;
+    if (this.worker) this.worker.postMessage({ type: "resize", ...size });
+    else this.painter.resize(size.w, size.h);
     this.maskKey = null;
     this.scheduleMasks();
     if (this.ready) this.draw(performance.now());
   }
 
   // The masks: for each depth, the alpha of everything the svg draws over its pulses (except other pulses, rain,
-  // snow and the labels, which never cover a pipe), over the area the pulses can reach. Drawn again when the look
-  // or the lanes change, or once a minute.
+  // snow and the labels, which never cover a pipe), over the area the pulses can reach. Drawn again only when an
+  // occluder changes (theme, parts, shutter, fog or canvas size), or once a minute while fog sways.
   scheduleMasks() {
-    const lanes = [...this.svg.querySelectorAll(".ef-line")].map((l) => l.className.baseVal + l.style.transform).join();
-    const key = `${lookKey(this.svg)}|${lanes}|${this.canvas.width}`;
-    if (key === this.maskKey && performance.now() - this.maskAt < RESAMPLE) return;
+    const svg = this.svg;
+    const fog = svg.getAttribute("data-weather") === "fog";
+    const occluders = ["ef-light", "ef-no-solar", "ef-no-b1", "ef-no-b2", "ef-garage-open"]
+      .filter((c) => svg.classList.contains(c)).join(" ");
+    const key = `${occluders}|${fog}|${this.width}`;
+    const fogMoves = fog && !svg.classList.contains("ef-low");
+    if (key === this.maskKey && (!fogMoves || performance.now() - this.maskAt < RESAMPLE)) return;
     this.maskKey = key;
     // One redraw waits or runs at a time and draws the picture as it is when it runs: readings coming in meanwhile
     // (Home Assistant sends one for every state change in the house) do not put it off; one during a run asks for
@@ -752,15 +701,16 @@ class PulseRenderer {
   }
 
   async drawMasks() {
-    if (this.failed || !this.canvas.width) return;
+    if (this.failed || !this.width) return;
     const run = this.maskRun = (this.maskRun || 0) + 1;  // a later run supersedes this one
-    const box = this.box = PULSE_BOX, scale = this.canvas.width / 1170;
+    const low = this.svg.classList.contains("ef-low");
+    const box = PULSE_BOX, scale = Math.min(this.width, low ? 512 : 2048) / 1170;
     const width = Math.max(1, Math.round(box[2] * scale)), height = Math.max(1, Math.round(box[3] * scale));
     // One copy of the picture serves every depth (a copy each was a lot of memory on a small device). The depths
     // come in the picture's own order, so each drops all that the one before dropped and more: the copy is stripped
     // further for each. What goes is settled from the elements' places in the whole copy, taken before any is gone.
     const clone = this.svg.cloneNode(true);
-    clone.classList.remove("ef-baked", "ef-gl", "ef-paused", "ef-still");
+    clone.classList.remove("ef-baked", "ef-gl", "ef-no-gl", "ef-paused", "ef-still");
     clone.classList.add("ef-masking");  // parts drawn only to fade the pulses (the grid pipe's end in light mode)
     clone.style.removeProperty("position");
     clone.setAttribute("viewBox", box.join(" "));
@@ -770,15 +720,31 @@ class PulseRenderer {
     const defs = clone.querySelector("defs");
     const used = new Set([...clone.querySelectorAll("use")].map((u) => u.getAttribute("href")?.slice(1)));
     const kept = all.map((el) => !!el.closest("defs, clipPath, mask, linearGradient, radialGradient, filter, pattern, style"));
-    // what never covers a pipe (a pipe's body, and the bright edge of a wall line, lie under its own pulses and never over another's)
-    const never = all.map((el) => el.matches(".ef-flow, .ef-pulse, .ef-lane, .ef-line .ef-pipe-shade, #ef-rain, #ef-snow, #ef-labels, .ef-lead, #ef-flash"));
+    const fog = this.svg.getAttribute("data-weather") === "fog";
+    // what never covers a pipe: pipe bodies, pulses, weather particles, labels, reflections, frost, seasonal lights,
+    // procedural grain overlays, and soft blurred shadows
+    const neverSel = ".ef-flow, .ef-pulse, .ef-lane, .ef-line .ef-pipe-shade, #ef-rain, #ef-snow, #ef-labels, .ef-lead, #ef-flash, "
+      + ".ef-frost, .ef-xmas, .ef-reflection, .ef-garage-spill, .ef-pane-spill, #ef-window-spill, #ef-b1-spill, #ef-b2-spill, .ef-tap, "
+      + '[fill="url(#ef-stucco-relief)"], [fill="url(#ef-render-grain)"], [fill="url(#ef-polished-grain)"], '
+      + '[filter="url(#ef-wall-shadow)"], [filter="url(#ef-eave-penumbra)"], [filter="url(#ef-ao-blur)"], [filter="url(#ef-rim-shadow)"], '
+      + '[filter="url(#ef-contact-shadow)"], [filter="url(#ef-car-fall-blur)"], [filter="url(#ef-car-shade-blur)"], [filter="url(#ef-car-touch)"], '
+      + '[filter="url(#ef-pane-inner-shade)"]' + (fog ? "" : ", #ef-fog");
+    const never = all.map((el) => el.matches(neverSel));
     const pulse = all.map((el) => el.matches(".ef-flow, .ef-pulse"));
     const firsts = this.levels.map((level) => {
       const at = live.indexOf(level.first), holders = new Set();
       for (let el = all[at]; el; el = el.parentNode) holders.add(el);
       return { at, holders };
     });
-    const gone = new Set();
+    // Masks only need crisp alpha silhouettes: stripping filters, noise patterns and unused pulse templates makes
+    // mask rasterization an order of magnitude faster without changing what covers the pipes.
+    for (const el of clone.querySelectorAll("filter, #ef-house-pulse, #ef-stucco-relief, #ef-render-grain, #ef-polished-grain")) el.remove();
+    for (const el of clone.querySelectorAll("[filter]")) el.removeAttribute("filter");
+    const noFx = document.createElementNS("http://www.w3.org/2000/svg", "style");
+    noFx.textContent = "*{filter:none!important;animation:none!important}";
+    defs.append(noFx);
+    const gone = new Set(), jobs = [];
+    const ser = new XMLSerializer();
     for (const [n, level] of this.levels.entries()) {
       const { at, holders } = firsts[n];
       all.forEach((el, i) => {
@@ -789,21 +755,34 @@ class PulseRenderer {
         // something a later <use> draws stays, out of sight in <defs>
         if (el.id && used.has(el.id) && !pulse[i]) defs.append(el); else el.remove();
       });
-      const url = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(clone)], { type: "image/svg+xml" }));
-      try {
-        const image = new Image();
-        image.src = url;
-        await image.decode();
-        let source = image;
-        if (typeof createImageBitmap === "function") source = await createImageBitmap(image).catch(() => image);
-        if (this.failed || run !== this.maskRun) return;
-        const gl = this.gl;
-        level.texture ??= this.texture();
-        gl.bindTexture(gl.TEXTURE_2D, level.texture);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
-        source.close?.();
-      } finally {
-        URL.revokeObjectURL(url);
+      if (!clone.querySelector("#ef-scene :is(path,rect,circle,ellipse,polygon,polyline,line,use)")) {
+        this.uploadMask(level.id, null);
+        continue;
+      }
+      jobs.push({ level, markup: ser.serializeToString(clone) });
+    }
+    // Decode and upload depth masks two at a time: faster than sequential without spiking peak RAM on small iPhones.
+    for (let i = 0; i < jobs.length; i += 2) {
+      const batch = await Promise.all(jobs.slice(i, i + 2).map(async ({ level, markup }) => {
+        const url = URL.createObjectURL(new Blob([markup], { type: "image/svg+xml" }));
+        try {
+          const image = new Image();
+          image.src = url;
+          await image.decode();
+          let source = image;
+          if (typeof createImageBitmap === "function") source = await createImageBitmap(image).catch(() => image);
+          return { level, source };
+        } finally {
+          URL.revokeObjectURL(url);
+        }
+      }));
+      if (this.failed || run !== this.maskRun) {
+        for (const { source } of batch) source.close?.();
+        return;
+      }
+      for (const { level, source } of batch) {
+        if (this.worker && !(source instanceof ImageBitmap)) { this.workerFallback(); return; }
+        this.uploadMask(level.id, source);
       }
     }
     this.maskAt = performance.now();
@@ -816,12 +795,21 @@ class PulseRenderer {
     this.sync();
   }
 
+  uploadMask(id, image) {
+    if (this.worker) this.worker.postMessage({ type: "mask", id, image }, image ? [image] : []);
+    else {
+      this.painter.mask(id, image);
+      image?.close?.();
+    }
+  }
+
   // The next frame: at once on high, else after a pause (a timer, so the page is not woken every screen refresh).
-  next() {
+  next(drawnAt) {
     if (this.raf || this.wait) return;
     const fps = LEVELS[this.view.level]?.fps ?? Infinity;
     if (!Number.isFinite(fps)) { this.raf = requestAnimationFrame(this.frame); return; }
-    this.wait = setTimeout(() => { this.wait = 0; this.raf = requestAnimationFrame(this.frame); }, Math.max(0, 1000 / fps - 8));
+    const spent = drawnAt ? Math.max(0, performance.now() - drawnAt) : 0;
+    this.wait = setTimeout(() => { this.wait = 0; this.raf = requestAnimationFrame(this.frame); }, Math.max(0, 1000 / fps - spent - 10));
   }
 
   stopFrames() {
@@ -832,7 +820,8 @@ class PulseRenderer {
 
   sync() {
     if (!this.ready) return;
-    if (this.view.pulsesRun()) this.next();
+    if (this.worker) { this.draw(performance.now()); return; }
+    if (this.view.pulsesRun() && this.hasShown) this.next();
     else { this.stopFrames(); this.draw(performance.now()); }
   }
 
@@ -842,8 +831,11 @@ class PulseRenderer {
     this.stopFrames();
     clearTimeout(this.maskTimer);
     this.failed = true;
-    this.gl?.getExtension("WEBGL_lose_context")?.loseContext();
+    this.worker?.terminate();
+    this.painter?.gl?.getExtension("WEBGL_lose_context")?.loseContext();
     this.svg.classList.remove("ef-gl");  // the svg's own pulses again, started in step
+    this.svg.classList.add("ef-no-gl");
+    this.view.syncFallbackDashes();
     this.view.restartBeats();
     this.view.flushBeats();
     this.view.alignBeats();
@@ -851,30 +843,10 @@ class PulseRenderer {
     this.canvas.remove();
   }
 
-  // Binds the piece's dash pattern, worked out again when its dashes, beat or the pixel size changed.
-  pattern(piece, aa) {
-    const gl = this.gl, key = `${piece.lead}|${piece.period}|${aa}`;
-    piece.patternTexture ??= this.texture();
-    gl.bindTexture(gl.TEXTURE_2D, piece.patternTexture);
-    if (piece.patternKey === key) return;
-    piece.patternKey = key;
-    // two texels to a pixel at least; a power of two, so the texture can repeat
-    let size = 64;
-    while (size < piece.period / aa * 2 && size < this.maxPattern) size *= 2;
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.ALPHA, size, 1, 0, gl.ALPHA, gl.UNSIGNED_BYTE,
-      dashPattern(piece.lengths, piece.opacities, piece.lead, piece.period, aa, size));
-  }
-
   draw(now) {
-    if (!this.ready) return;
-    const gl = this.gl, u = this.u, view = this.view;
-    gl.clearColor(0, 0, 0, 0);
-    gl.clear(gl.COLOR_BUFFER_BIT);
-    const beat = (now - view.beatStart) * PULSE_SPEED / 1000;
-    const aa = 1170 / this.canvas.width;
-    gl.uniform1f(u.u_aa, aa);
-    gl.uniform4f(u.u_box, ...this.box);
+    if (!this.ready || this.failed) return;
+    const view = this.view, pieces = [];
+    let sliding = false;
     // Each lane's [moving, opacity], read once after a reading and then only while it slides: a style read every
     // frame made the browser bring the picture's styles up to date every frame.
     const lines = this.lineStates ??= new Map();
@@ -891,30 +863,21 @@ class PulseRenderer {
         const [moving, opacity] = lines.get(piece.line);
         if (moving || piece.moving) piece.matrix = this.toPicture(piece.group) || piece.matrix;
         piece.moving = moving;
+        sliding ||= moving;
         alpha = opacity;
         if (!alpha) continue;
       }
       const m = piece.matrix;
-      gl.uniformMatrix3fv(u.u_m, false, [m.a, m.b, 0, m.c, m.d, 0, m.e, m.f, 1]);
-      gl.uniform1f(u.u_shift, piece.direction * (beat % piece.period) + piece.fixed);
-      gl.uniform1f(u.u_period, piece.period);
-      gl.uniform1f(u.u_alpha, alpha);
-      gl.uniform3fv(u.u_color, piece.color);
-      gl.uniform1f(u.u_clipOn, piece.clip ? 1 : 0);
-      if (piece.clip) gl.uniform2fv(u.u_clip, piece.clip);
-      gl.activeTexture(gl.TEXTURE1);
-      this.pattern(piece, aa);
-      gl.activeTexture(gl.TEXTURE0);
-      gl.bindTexture(gl.TEXTURE_2D, piece.level.texture || this.blank);
-      gl.bindBuffer(gl.ARRAY_BUFFER, piece.buffer);
-      const at = this.a;
-      gl.vertexAttribPointer(at.pos, 2, gl.FLOAT, false, 32, 0);
-      gl.vertexAttribPointer(at.n, 2, gl.FLOAT, false, 32, 8);
-      gl.vertexAttribPointer(at.e, 2, gl.FLOAT, false, 32, 16);
-      gl.vertexAttribPointer(at.s, 1, gl.FLOAT, false, 32, 24);
-      gl.vertexAttribPointer(at.out, 1, gl.FLOAT, false, 32, 28);
-      gl.drawArrays(gl.TRIANGLES, 0, piece.count);
+      pieces.push({ id: piece.id, level: piece.level.id, matrix: [m.a, m.b, 0, m.c, m.d, 0, m.e, m.f, 1],
+        alpha, color: piece.color, lead: piece.lead, direction: piece.direction, period: piece.period, fixed: piece.fixed, clip: piece.clip });
     }
+    if (this.worker) {
+      const run = view.pulsesRun() && this.hasShown;
+      this.worker.postMessage({ type: "scene", pieces, origin: performance.timeOrigin + view.beatStart,
+        fps: run ? LEVELS[view.level].fps : 0 });
+      // Only a sliding SVG lane needs fresh DOM measurements between readings.
+      if (sliding && run && !this.raf) this.raf = requestAnimationFrame(this.frame);
+    } else this.painter.paint(pieces, (now - view.beatStart) * PULSE_SPEED / 1000);
   }
 }
 
@@ -925,9 +888,9 @@ class PulseRenderer {
 export const EFFECTS = ["auto", "high", "medium", "low"];
 const LEVELS = {
   // fps: how often the pulse layer draws. The pulses move slowly, and each frame costs a phone's GPU and battery.
-  high: { cap: Infinity, shimmer: true, fps: Infinity, label: "High" },
-  medium: { cap: 1.5, shimmer: false, fps: 30, label: "Medium" },
-  low: { cap: 1, shimmer: false, fps: 20, label: "Low" },
+  high: { cap: Infinity, maxWidth: 2048, shimmer: true, fps: Infinity, label: "High" },
+  medium: { cap: 1.5, maxWidth: 1280, shimmer: false, fps: 30, label: "Medium" },
+  low: { cap: 1, maxWidth: 640, shimmer: false, fps: 30, label: "Low" },
 };
 const OLD_EFFECTS = { full: "high", reduced: "low" };  // the names in 0.4.0
 export const effectsLevel = (value) => OLD_EFFECTS[value] ?? (EFFECTS.includes(value) ? value : "auto");
@@ -985,7 +948,9 @@ class FrameWatch {
 }
 
 export class EnergyFlowView {
-  constructor(container, svgText) {
+  constructor(container, svgText, pulseProfile, pulseWorkerSource) {
+    this.pulseWorkerSource = pulseWorkerSource;
+    this.pulseProfile = pulseProfile;
     container.innerHTML = svgText;
     this.svg = container.querySelector("svg");
     this.cfg = DEFAULTS;
@@ -1056,6 +1021,10 @@ export class EnergyFlowView {
   suspend() {
     if (this.suspended) return;
     this.suspended = true;
+    clearTimeout(this.reflectionTimer);
+    this.lastSkyWeather = null;
+    clearTimeout(this.contrastTimer);
+    this.contrastTimer = 0;
     document.removeEventListener("visibilitychange", this.onVisibility);
     this.observer?.disconnect();
     removeEventListener(EFFECTS_KEY, this.onEffects);
@@ -1080,6 +1049,8 @@ export class EnergyFlowView {
   }
 
   destroy() {
+    clearTimeout(this.reflectionTimer);
+    clearTimeout(this.contrastTimer);
     clearTimeout(this.garageMoving);
     clearTimeout(this.relabel);
     clearTimeout(this.settle);
@@ -1230,16 +1201,47 @@ export class EnergyFlowView {
 
   // density: the lower density "auto" settled on before asking, if any
   setLevel(level, density) {
+    const prev = this.level;
     this.level = level;
+    const changeRenderer = this.pulses && prev !== level && (level === "low" || prev === "low")
+      && !this.workerFailed && typeof Worker === "function" && typeof createImageBitmap === "function"
+      && typeof HTMLCanvasElement.prototype.transferControlToOffscreen === "function";
     const cap = level === "high" && density ? density : LEVELS[level].cap;
     this.svg.classList.toggle("ef-lite", level !== "high");
     this.svg.classList.toggle("ef-low", level === "low");
-    if (cap !== this.densityCap) {
+    if (cap !== this.densityCap || prev !== level) {
       this.densityCap = cap;
       this.shimmer?.place();
-      this.pulses?.place();
+      if (changeRenderer) {
+        this.pulses.destroy();
+        this.pulses = null;
+        if (this.svg.isConnected && !this.suspended) this.updatePulses();
+      } else this.pulses?.place();
     }
+    this.syncFallbackDashes();
     if ("celsius" in this) this.temperature(this.celsius);
+  }
+
+  // Materialize the full stack only for the higher-detail SVG fallback. The GPU uses the shared profile.
+  syncFallbackDashes() {
+    const full = !this.suspended && this.level !== "low" && this.svg.classList.contains("ef-no-gl");
+    if (full === !!this.fullDashes) return;
+    this.fullDashes = full;
+    for (const seed of this.svg.querySelectorAll(".ef-flow .ef-p10")) {
+      const parent = seed.parentNode;
+      if (full) {
+        const retained = [...parent.querySelectorAll(".ef-pulse")];
+        let next = 0;
+        for (let n = 1; n <= this.pulseProfile.lengths.length; n++) {
+          if (retained[next]?.classList.contains(`ef-p${n}`)) { next++; continue; }
+          const dash = seed.cloneNode(false);
+          dash.setAttribute("class", `ef-pulse ef-p${n}`);
+          parent.insertBefore(dash, retained[next] || null);
+        }
+      } else {
+        for (const dash of parent.querySelectorAll(".ef-pulse:not(.ef-p10):not(.ef-p25):not(.ef-p40):not(.ef-p51)")) dash.remove();
+      }
+    }
   }
 
   // Watched only while there is something to judge and nothing chosen yet.
@@ -1477,6 +1479,7 @@ export class EnergyFlowView {
   // Every wire runs its own beat animation (cheaper than one on the whole picture); they all take their time from
   // the one clock, so a wire that appears joins in step with the others.
   alignBeats() {
+    if (this.svg.classList.contains("ef-gl")) return;
     if (!this.svg.getAnimations || !this.cycleDistance) return;
     const now = document.timeline?.currentTime ?? performance.now();
     for (const a of this.svg.getAnimations({ subtree: true })) {
@@ -1487,18 +1490,23 @@ export class EnergyFlowView {
     }
   }
 
-  light(name, body, brightness, reflection) {
+  light(name, body, brightness) {
     const el = this.part(`ef-${name}`);
     el.style.opacity = brightness;
+    if (!body || !brightness) return;
+    const height = Math.sin(Math.max(0, body.altitude) * Math.PI / 180);
+    this.attr(el, "transform", `translate(${skyX(body.progress)} ${125 - height * 89})`);
+  }
+
+  panelReflection(name, body, reflection) {
     this.attr(this.part(`ef-${name}-shine`), "opacity", reflection);
     const coating = this.part(`ef-${name}-coating-glint`);
     const fold = this.part(`ef-${name}-fold-glint`);
     this.attr(coating, "opacity", Math.min(1, reflection * 1.28));
     this.attr(fold, "opacity", Math.min(1, reflection * 1.10));
-    if (!body || !brightness) return;
-    const { progress, altitude } = body;
-    const height = Math.sin(Math.max(0, altitude) * Math.PI / 180);
-    const bodyX = skyX(progress);
+    if (!body || !reflection) return;
+    const height = Math.sin(Math.max(0, body.altitude) * Math.PI / 180);
+    const bodyX = skyX(body.progress);
     // Project the moving light onto the inclined glass, then onto the lower metal fold.
     const glintX = bodyX + 117;
     const glassY = 610 - .202 * glintX - 49 * height;
@@ -1506,13 +1514,12 @@ export class EnergyFlowView {
     const foldY = 855 - .22334 * foldX;
     this.attr(coating, "transform", `translate(${glintX} ${glassY})`);
     this.attr(fold, "transform", `translate(${foldX} ${foldY})`);
-    this.attr(el, "transform", `translate(${bodyX} ${125 - height * 89})`);
     // Follow the front array's centre line, with the solar glint just to the right of the disc.
     const solar = name === "sun";
     const x = solar ? bodyX + 10 : bodyX;
-    const y = 674 - .2 * x - 10 * height;
+    const y = 682.55 - .215 * x - 10 * height;
     const centre = `translate(${x} ${y})`;
-    const softShape = "matrix(1 -.2 .33 .52 0 0)";
+    const softShape = "matrix(1 -.215 .33 .52 0 0)";
     const shape = solar ? `rotate(86) scale(.67 ${.16 + .05 * height})` : softShape;
     this.attr(this.part(`ef-${name}-reflection`), "gradientTransform", `${centre} ${shape}`);
     if (solar) this.attr(this.part("ef-sun-sheen"), "gradientTransform", `${centre} ${softShape}`);
@@ -1536,13 +1543,21 @@ export class EnergyFlowView {
 
     const sunlight = sun ? visibility * smoothstep(HORIZON, 4, altitude) : 0;
     const sunHeight = Math.sin(Math.max(0, altitude) * Math.PI / 180);
-    this.light("sun", sun, sunlight, sunlight * (.45 + .35 * sunHeight));
+    this.light("sun", sun, sunlight);
 
     const fraction = moon?.illuminated ?? 0;
     const moonlightKey = () => moon ? `${Math.round(skyX(moon.progress) / 4)},${Math.round(moon.altitude)}` : "";
     const moonlight = moon ? visibility * (1 - smoothstep(-6, HORIZON, altitude)) * smoothstep(HORIZON, 2, moon.altitude) : 0;
     const moonBrightness = moonlight * Math.min(1, fraction * 45);
-    this.light("moon", moon, moonBrightness, moonlight * fraction ** 1.5 * .2);
+    this.light("moon", moon, moonBrightness);
+    // Both arrays reference the same glints. Repainting their gradients at every slider step is costly.
+    const reflect = () => {
+      this.panelReflection("sun", sun, sunlight * (.45 + .35 * sunHeight));
+      this.panelReflection("moon", moon, moonlight * fraction ** 1.5 * .2);
+    };
+    clearTimeout(this.reflectionTimer);
+    if (this.level === "low" && this.skyKey !== undefined) this.reflectionTimer = setTimeout(reflect, 400);
+    else reflect();
     // Snapshots of the picture (heat shimmer, label contrast) are taken again once the sky looks different: the sun
     // or moon a few units on, or the light a step brighter or darker. Coarse enough that a live card, whose sky
     // creeps, re-takes them only every few minutes; a jump in time (the lab's slider) re-takes them at once.
@@ -1711,13 +1726,16 @@ export class EnergyFlowView {
 
     const weather = WEATHERS.includes(state.weather) ? state.weather : "cloudy";
     this.attr(this.svg, "data-weather", PICTURE_WEATHER[weather]);
-    this.updateSky(state.sky, weather);
+    if (state.sky !== this.lastSky || weather !== this.lastSkyWeather) {
+      this.updateSky(state.sky, weather);
+      this.lastSky = state.sky;
+      this.lastSkyWeather = weather;
+    }
     this.temperature(state.temperature);
     // The pulses on the GPU where the browser can; otherwise the svg's own stay.
     // Made once the picture is on the page: Home Assistant sends the first readings before that, when the dashes have
     // no computed lengths, opacities or colours yet and the pulses would be measured as nothing (issue #1).
-    if (this.svg.isConnected) this.pulses ??= typeof WebGLRenderingContext === "function" ? new PulseRenderer(this) : null;
-    this.pulses?.update();
+    if (this.svg.isConnected) this.updatePulses();
     // A new look (weather, heat) is judged afresh.
     const look = lookKey(this.svg);
     if (look !== this.watchedLook) { this.watchedLook = look; this.fine = 0; this.watchFrames(); }
@@ -1733,6 +1751,17 @@ export class EnergyFlowView {
     }
     this.scheduleLabelContrast();
     this.restAgain();
+  }
+
+  updatePulses() {
+    if (!this.pulses && typeof WebGLRenderingContext === "function") {
+      this.svg.classList.remove("ef-no-gl");
+      this.syncFallbackDashes();
+      this.pulses = new PulseRenderer(this);
+    }
+    this.svg.classList.toggle("ef-no-gl", !this.pulses || !!this.pulses.failed);
+    this.syncFallbackDashes();
+    this.pulses?.update();
   }
 
   // Animations started while the picture rests (by readings, or by a timer below once a slide is over) pause too.
@@ -1859,12 +1888,12 @@ export class EnergyFlowView {
   // Air temperature in °C, or nothing. The shimmer grows a little stronger with the heat.
   temperature(celsius) {
     this.celsius = celsius;
-    const hot = !missing(celsius) && celsius > HOT;
+    const hot = !missing(celsius) && celsius > HOT && LEVELS[this.level].shimmer && !matchMedia(REDUCED_MOTION).matches;
     this.svg.classList.toggle("ef-hot", hot);
     const frost = missing(celsius) ? 0 : Math.max(0, Math.min(1, (FROST_START - celsius) / (FROST_START - FROST_FULL)));
     this.svg.classList.toggle("ef-frosty", frost > 0);
     this.svg.style.setProperty("--ef-frost", frost.toFixed(2));
-    if (hot && LEVELS[this.level].shimmer && !matchMedia(REDUCED_MOTION).matches) {
+    if (hot) {
       this.shimmer ??= new HeatShimmer(this.svg, this);
       this.shimmer.show(Math.min(8, 3 + (celsius - HOT) * .4));
     } else {
@@ -1873,6 +1902,7 @@ export class EnergyFlowView {
   }
 
   restWhenUnseen() {
+    const wasPaused = this.paused;
     this.paused = !this.seen || document.hidden || !!this.suspended;
     this.syncAnimations();
     this.shimmer?.sync();
@@ -1880,6 +1910,7 @@ export class EnergyFlowView {
     this.watchFrames();
     this.alignBeats();
     this.scheduleLabelContrast();
+    if (wasPaused && !this.paused) this.onVisible?.();
   }
 
   canSampleContrast() {
@@ -1961,6 +1992,12 @@ export class EnergyFlowView {
     const scene = svg.cloneNode(true);
     scene.querySelector("#ef-labels").remove();
     scene.classList.remove("ef-baked");  // the still parts the shimmer canvas draws are background too
+    // Strip heavy filters, noise patterns and pulse dashes: at 240 px wide they only slow down rasterization.
+    for (const el of scene.querySelectorAll("filter, .ef-flow, .ef-pulse, #ef-house-pulse, #ef-stucco-relief, #ef-render-grain, #ef-polished-grain")) el.remove();
+    for (const el of scene.querySelectorAll("[filter]")) el.removeAttribute("filter");
+    const noFx = document.createElementNS("http://www.w3.org/2000/svg", "style");
+    noFx.textContent = "*{filter:none!important;animation:none!important}";
+    scene.querySelector("defs")?.append(noFx);
     const drift = scene.querySelector("#ef-drift");
     drift.style.animation = "none";
     drift.style.transform = getComputedStyle(this.part("ef-drift")).transform;
@@ -1978,7 +2015,7 @@ export class EnergyFlowView {
       const image = new Image();
       image.src = url;
       await image.decode();
-      if (!this.canSampleContrast()) return;
+      if (!this.canSampleContrast() || key !== this.stillKey()) return;
       context.drawImage(image, 0, 0);
       for (const label of this.part("ef-labels").querySelectorAll("text")) {
         if (label.getClientRects().length) this.adaptLabel(label, context, scale);
@@ -1999,20 +2036,31 @@ export class EnergyFlowView {
 
   scheduleLabelContrast() {
     if (!this.canSampleContrast()) return;
-    if (this.contrastKey === this.stillKey() && performance.now() - this.contrastAt < RESAMPLE) return;
-    this.contrastDirty = true;
-    if (this.contrastBusy) return;
-    this.contrastBusy = true;
-    setTimeout(async () => {
+    const key = this.stillKey();
+    const low = this.level === "low";
+    // Low mode holds the clouds and stars still. The backdrop changes when its key changes.
+    if (this.contrastKey === key && (low || performance.now() - this.contrastAt < RESAMPLE)) {
+      clearTimeout(this.contrastTimer);
+      this.contrastTimer = 0;
+      return;
+    }
+    if (this.contrastBusy) { this.contrastDirty = true; return; }
+    if (this.contrastTimer && (!low || this.pendingContrastKey === key)) return;
+    clearTimeout(this.contrastTimer);
+    this.pendingContrastKey = key;
+    this.contrastTimer = setTimeout(async () => {
+      this.contrastTimer = 0;
+      if (!this.canSampleContrast()) return;
+      this.contrastBusy = true;
       this.contrastDirty = false;
       try {
-        if (this.canSampleContrast()) await this.sampleLabelContrast();
+        await this.sampleLabelContrast();
       } catch {
         // Keep the base label colours if the browser cannot rasterize the scene.
       } finally {
         this.contrastBusy = false;
         if (this.contrastDirty) this.scheduleLabelContrast();
       }
-    }, 160);
+    }, low ? 750 : 160);
   }
 }

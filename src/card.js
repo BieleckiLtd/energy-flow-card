@@ -3,7 +3,7 @@
 // through preview(), without Home Assistant.
 import { EnergyFlowView, DEFAULTS, WEATHERS, effectsLevel, validColor, christmasSeason, themed } from "./view.js";
 import { energySky } from "./sky.js";
-import { SVG, VERSION } from "./svg.js";
+import { SVG, VERSION, PULSE_PROFILE, PULSE_WORKER } from "./svg.js";
 
 // Home Assistant's weather states -> the picture's weather
 const HA_WEATHER = {
@@ -23,6 +23,8 @@ const OPEN = ["open", "on"], ON = ["on", "open"];
 export function normalizeConfig(config = {}) {
   const out = { title: config.title || "", weather: config.weather || "", temperature: config.temperature || "", latitude: config.latitude, longitude: config.longitude,
     festive: (config.festive ?? config.christmas) !== false, effects: effectsLevel(config.effects),
+    // auto, high, medium or low — or an entity (input_select / select) whose state chooses the detail level.
+    effectsEntity: isEntity(config.effects) ? config.effects.trim() : "",
     // light or dark, or auto: Home Assistant's own dark mode (outside it, the device's). Or an entity (an input_select,
     // select or input_boolean) whose state says which: light, dark or auto (on = dark).
     theme: ["light", "dark"].includes(config.theme) ? config.theme : "auto",
@@ -66,14 +68,20 @@ const UNIT = { w: 1, kw: 1000, mw: 1e6 };
 const RELEASE_AFTER = 10000;  // ms off the page before a card counts as thrown away
 
 export class EnergyFlowCard extends HTMLElement {
+  // Standalone dashboards can feed the same renderer directly and retain their own layout and interactions.
+  static createView(container) {
+    return new EnergyFlowView(container, SVG, PULSE_PROFILE, PULSE_WORKER);
+  }
+
   constructor() {
     super();
     this.attachShadow({ mode: "open" });
     this.shadowRoot.innerHTML = `
       <style>
         :host { display: block; }
-        ha-card, .card { overflow: hidden; background: var(--efc-background, #17181a); border-radius: var(--ha-card-border-radius, 12px); }
+        ha-card, .card { overflow: hidden; contain: layout style; background: var(--efc-background, #17181a); border-radius: var(--ha-card-border-radius, 12px); }
         .card { display: block; }
+        .picture { contain: layout style paint; }
         .title { margin: 0; padding: 14px 16px 0; font: 500 16px/1.3 var(--paper-font-body1_-_font-family, system-ui, sans-serif); color: #f1f1f1; }
         .light .title { color: #1d1e20; }
         /* Not an icon: back to SVG's own defaults, whatever the page around it inherits. */
@@ -82,7 +90,8 @@ export class EnergyFlowCard extends HTMLElement {
       <div class="card" part="card"><h2 class="title" hidden></h2><div class="picture"></div></div>`;
     this.picture = this.shadowRoot.querySelector(".picture");
     this.titleEl = this.shadowRoot.querySelector(".title");
-    this.view = new EnergyFlowView(this.picture, SVG);
+    this.view = EnergyFlowCard.createView(this.picture);
+    this.view.onVisible = () => { if (this.readingsPending) this.queueReadings(); };
     this.view.part("ef-labels").addEventListener("click", (e) => this.openMoreInfo(e));
     this.view.part("ef-tap-garage").addEventListener("click", () => this.toggle("garage"));
     this.view.part("ef-tap-window").addEventListener("click", () => this.tapWindow());
@@ -114,6 +123,8 @@ export class EnergyFlowCard extends HTMLElement {
   }
 
   disconnectedCallback() {
+    cancelAnimationFrame(this.readingsFrame);
+    this.readingsFrame = 0;
     clearInterval(this.clock);
     this.clock = null;
     this.view.suspend();
@@ -132,6 +143,8 @@ export class EnergyFlowCard extends HTMLElement {
     this.titleEl.textContent = this.config.title;
     this.titleEl.hidden = !this.config.title;
     this.light = null;
+    this.effectsMode = null;
+    this.applyEffects();
     this.applyTheme();
     for (const [id, part] of [["ef-solar-label", "solar"], ["ef-home-name", "home"], ["ef-home", "home"],
       ["ef-grid-name", "grid"], ["ef-grid", "grid"], ["ef-ev-label", "ev"], ["ef-b1-label", "battery1"], ["ef-b2-label", "battery2"]]) {
@@ -147,9 +160,19 @@ export class EnergyFlowCard extends HTMLElement {
     const old = this._hass;
     this._hass = hass;
     if (!this.clock && this.isConnected) this.startClock();
-    if (this.applyTheme()) { this.render(); return; }
-    if (old && old.config === hass.config && this.watched().every((e) => old.states[e] === hass.states[e])) return;
-    this.render();
+    const themeChanged = this.applyTheme(), effectsChanged = this.applyEffects();
+    if (!themeChanged && !effectsChanged && old && old.config === hass.config && this.watched().every((e) => old.states[e] === hass.states[e])) return;
+    this.queueReadings();
+  }
+
+  // HA may deliver several readings before the screen paints. Keep the latest state while offscreen, too.
+  queueReadings() {
+    this.readingsPending = true;
+    if (this.readingsFrame || !this.isConnected || this.view.paused || document.hidden) return;
+    this.readingsFrame = requestAnimationFrame(() => {
+      this.readingsFrame = 0;
+      if (this.readingsPending && !this.view.paused && !document.hidden) this.render();
+    });
   }
 
   // Every entity in the config, as written: the parts' sensors, extras, weather, temperature, garage and lights.
@@ -178,11 +201,24 @@ export class EnergyFlowCard extends HTMLElement {
     const light = theme === "auto" ? (typeof dark === "boolean" ? !dark : !!this.scheme?.matches) : theme === "light";
     if (light === this.light) return false;
     this.light = light;
-    const cfg = { ...this.config, light }, background = themed(cfg, "look", "background");
+    const cfg = { ...this.config, light, effects: this.effectsMode ?? this.config.effects }, background = themed(cfg, "look", "background");
     this.picture.style.background = background;
     this.shadowRoot.host.style.setProperty("--efc-background", background);
     this.shadowRoot.querySelector(".card").classList.toggle("light", light);
     this.view.configure(cfg);
+    return true;
+  }
+
+  // Detail level, from the config or an entity (input_select / select). Applied only when it changes; true when it did.
+  applyEffects() {
+    const chosen = this.config.effectsEntity && this._hass?.states[this.config.effectsEntity]?.state;
+    const effects = chosen ? effectsLevel(String(chosen).toLowerCase()) : this.config.effects;
+    if (effects === this.effectsMode) return false;
+    this.effectsMode = effects;
+    if (this.view.cfg) {
+      this.view.cfg = { ...this.view.cfg, effects };
+      this.view.applyEffects();
+    }
     return true;
   }
 
@@ -196,7 +232,7 @@ export class EnergyFlowCard extends HTMLElement {
   // The sky moves on even when no sensor changes.
   startClock() {
     clearInterval(this.clock);
-    this.clock = setInterval(() => this.render(), 60000);
+    this.clock = setInterval(() => this.queueReadings(), 60000);
   }
 
   // Garage open, lights on: the entity's state if there is one, else a tap's, else the config's.
@@ -284,10 +320,22 @@ export class EnergyFlowCard extends HTMLElement {
     return v !== null && c.invert ? -v : v;
   }
 
+  skyAt(latitude, longitude, time) {
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+    // The wall clock advances the sky once per minute. An explicit time entity can also specify seconds.
+    const instant = this.config.timeEntity ? time : Math.floor(time / 60000) * 60000;
+    const cached = this.skyCache;
+    if (cached?.instant === instant && cached.latitude === latitude && cached.longitude === longitude) return cached.sky;
+    const sky = energySky(latitude, longitude, instant);
+    this.skyCache = { instant, latitude, longitude, sky };
+    return sky;
+  }
+
   readHass() {
     const hass = this._hass, cfg = this.config;
     const weatherState = cfg.weather && hass.states[cfg.weather]?.state;
     const latitude = Number(cfg.latitude ?? hass.config?.latitude), longitude = Number(cfg.longitude ?? hass.config?.longitude);
+    const time = this.now();
     const solar = this.signed(cfg.solar, "entity");
     return {
       solar: solar === null ? null : Math.abs(solar),
@@ -300,9 +348,9 @@ export class EnergyFlowCard extends HTMLElement {
       battery1: { power: this.signed(cfg.battery1, "power", "discharge", "charge"), soc: this.number(cfg.battery1.soc) },
       battery2: { power: this.signed(cfg.battery2, "power", "discharge", "charge"), soc: this.number(cfg.battery2.soc) },
       weather: HA_WEATHER[weatherState] || (cfg.weather ? "cloudy" : "clear"),
-      sky: Number.isFinite(latitude) && Number.isFinite(longitude) ? energySky(latitude, longitude, this.now()) : null,
+      sky: this.skyAt(latitude, longitude, time),
       temperature: this.celsius(),
-      time: this.now(),
+      time,
     };
   }
 
@@ -324,6 +372,7 @@ export class EnergyFlowCard extends HTMLElement {
 
   render() {
     if (this.view.suspended) return;  // off the page: drawn again when it is back (connectedCallback)
+    this.readingsPending = false;
     const state = this.previewState || (this._hass ? this.readHass() : null);
     if (state) this.view.update({ ...state, garage: this.switchedOn("garage"), lights: this.switchedOn("lights"),
       decorations: this.switchedOn("lights") && (this.local.decorations ?? true) });
