@@ -337,8 +337,8 @@ class HeatShimmer {
           const markup = this.stillMarkup();
           if (markup === this.markup) { this.key = key; this.snapAt = performance.now(); continue; }
           const url = URL.createObjectURL(new Blob([markup], { type: "image/svg+xml" }));
+          const image = new Image();
           try {
-            const image = new Image();
             image.src = url;
             await image.decode();
             // drawn into a bitmap away from the frame being shown, where the browser can; the upload is then quick
@@ -352,6 +352,7 @@ class HeatShimmer {
             this.snapAt = performance.now();
           } finally {
             URL.revokeObjectURL(url);
+            releaseImage(image);
           }
         }
       } catch {
@@ -440,6 +441,12 @@ function fitCanvas(canvas, svg, cap = Infinity, maxWidth = 2048) {
   Object.assign(canvas.style, { left: pct(left, pw), top: pct(top, ph), width: pct(width, pw), height: pct(height, ph) });
   const density = Math.min(devicePixelRatio || 1, cap, maxWidth / width);
   return { w: Math.round(width * density), h: Math.round(height * density) };
+}
+
+// A snapshot's <img> lets go of its decoded picture now. Each holds a whole SVG document of its own, and waiting for
+// the garbage collector let them pile up, which Safari answers by reloading the page (issue #3).
+function releaseImage(image) {
+  if (typeof HTMLImageElement === "function" && image instanceof HTMLImageElement) image.removeAttribute("src");
 }
 
 const MASK_WAIT = 700;  // ms after a change before the masks are drawn again (lanes slide for .55 s)
@@ -765,19 +772,20 @@ class PulseRenderer {
     for (let i = 0; i < jobs.length; i += 2) {
       const batch = await Promise.all(jobs.slice(i, i + 2).map(async ({ level, markup }) => {
         const url = URL.createObjectURL(new Blob([markup], { type: "image/svg+xml" }));
+        const image = new Image();
+        let source = image;
         try {
-          const image = new Image();
           image.src = url;
           await image.decode();
-          let source = image;
           if (typeof createImageBitmap === "function") source = await createImageBitmap(image).catch(() => image);
           return { level, source };
         } finally {
           URL.revokeObjectURL(url);
+          if (source !== image) releaseImage(image);  // the bitmap has its pixels; else it is uploaded as it is
         }
       }));
       if (this.failed || run !== this.maskRun) {
-        for (const { source } of batch) source.close?.();
+        for (const { source } of batch) { source.close?.(); releaseImage(source); }
         return;
       }
       for (const { level, source } of batch) {
@@ -800,6 +808,7 @@ class PulseRenderer {
     else {
       this.painter.mask(id, image);
       image?.close?.();
+      releaseImage(image);
     }
   }
 
@@ -2011,8 +2020,8 @@ export class EnergyFlowView {
     const context = this.canvas.getContext("2d", { willReadFrequently: true });
     if (!context) return;
     const url = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(scene)], { type: "image/svg+xml" }));
+    const image = new Image();
     try {
-      const image = new Image();
       image.src = url;
       await image.decode();
       if (!this.canSampleContrast() || key !== this.stillKey()) return;
@@ -2028,6 +2037,7 @@ export class EnergyFlowView {
       this.contrastAt = performance.now();
     } finally {
       URL.revokeObjectURL(url);
+      releaseImage(image);
     }
   }
 
