@@ -187,13 +187,18 @@ void main(){
   gl_FragColor=mix(texture2D(u_a,uv),texture2D(u_b,uv),u_mix);
 }`;
 const SHIMMER_FADE = 600;  // ms to cross-fade a new snapshot in
-// Rasterizing the picture holds up the page for a moment, which shows as a hitch in every animation. The sky
-// background is sampled again only when the look changes (weather, night, decorations, colours) or after this long
-// (ms): the sun, the light and the clouds move slowly enough.
-const RESAMPLE = 60000;
+// A snapshot of the picture costs time (a hitch in every animation) and memory (a whole copy of the picture, which
+// the browser keeps until it next collects garbage: issue #3). None is taken on a timer: only when what it shows
+// has changed.
 const TRANSIENT = new Set(["ef-paused", "ef-baked", "ef-still", "ef-restart", "ef-garage-moving", "ef-relabel", "ef-swap"]);
 const lookKey = (svg) => [...svg.classList].filter((c) => !TRANSIENT.has(c)).join(" ")
   + "|" + svg.getAttribute("data-weather") + "|" + svg.getAttribute("data-time");
+// Classes that change only what is drawn live over the shimmer canvas (the garage and its shutter, the lights, the
+// lanes, the labels, the Christmas lights) or how the pulses are drawn.
+const LIVE_OVER_SHIMMER = new Set(["ef-garage-open", "ef-lights-off", "ef-ev-on", "ef-shared", "ef-gl", "ef-no-gl",
+  "ef-xmas-off", "ef-xmas-lit"]);
+// Still parts that are drawn live even so (see .ef-baked in the svg), and so are left out of the snapshot.
+const LIVE_PARTS = "#ef-garage, #ef-shutter, .ef-open-jamb, .ef-window-wall-bounce";
 
 class HeatShimmer {
   constructor(svg, view) {
@@ -276,6 +281,7 @@ class HeatShimmer {
     this.raf = 0;
     this.shown = false;
     this.markup = null;
+    this.look = null;
     this.fadeStart = -1;
     this.svg.classList.remove("ef-baked");
     this.canvas.style.visibility = "hidden";
@@ -317,15 +323,21 @@ class HeatShimmer {
     const scene = clone.querySelector("#ef-scene");
     for (const el of [...scene.children]) if (!el.classList.contains("ef-bake")) el.remove();
     for (const el of [...clone.children]) if (el.localName !== "defs" && el !== scene) el.remove();
+    for (const el of scene.querySelectorAll(LIVE_PARTS)) el.remove();
     clone.setAttribute("width", this.canvas.width);
     clone.setAttribute("height", this.canvas.height);
     return new XMLSerializer().serializeToString(clone);
   }
 
-  // A new snapshot, once things settle, if the still parts look any different.
+  // A new snapshot, once things settle, if the still parts look any different. The shimmer is decoration and can
+  // wait: when the look changes (weather, day or night, theme) it stops, the picture draws its own still parts at
+  // once, and it starts again when the new snapshot is in. The sky creeping on cross-fades instead, as does a
+  // snapshot asked for again (new colours, a new size).
   refresh() {
     if (this.failed || !this.canvas.width || !this.svg.classList.contains("ef-hot")) return;
-    if (this.markup && this.key === this.view.stillKey() && performance.now() - this.snapAt < RESAMPLE) return;
+    const look = this.view.shimmerLook();
+    if (this.markup && this.look === look && this.sky === this.view.skyKey) return;
+    if (this.shown && this.look != null && this.look !== look) this.hide();
     this.dirty = true;
     if (this.busy || (this.shown && !this.running())) return;
     this.busy = true;
@@ -333,9 +345,9 @@ class HeatShimmer {
       try {
         while (this.dirty && !this.failed && this.svg.classList.contains("ef-hot")) {
           this.dirty = false;
-          const key = this.view.stillKey();
+          const look = this.view.shimmerLook(), sky = this.view.skyKey;
           const markup = this.stillMarkup();
-          if (markup === this.markup) { this.key = key; this.snapAt = performance.now(); continue; }
+          if (markup === this.markup) { this.look = look; this.sky = sky; continue; }
           const url = URL.createObjectURL(new Blob([markup], { type: "image/svg+xml" }));
           const image = new Image();
           try {
@@ -348,8 +360,8 @@ class HeatShimmer {
             this.upload(source);
             source.close?.();
             this.markup = markup;
-            this.key = key;
-            this.snapAt = performance.now();
+            this.look = look;
+            this.sky = sky;
           } finally {
             URL.revokeObjectURL(url);
             releaseImage(image);
@@ -365,7 +377,7 @@ class HeatShimmer {
 
   // Snapshot again on the next update, e.g. after new colours.
   // The snapshot in use stays: one that comes out the same (a name changed, say) is not drawn and uploaded again.
-  invalidate() { this.key = null; }
+  invalidate() { this.look = null; }
 
   upload(image) {
     const gl = this.gl;
@@ -684,15 +696,14 @@ class PulseRenderer {
 
   // The masks: for each depth, the alpha of everything the svg draws over its pulses (except other pulses, rain,
   // snow and the labels, which never cover a pipe), over the area the pulses can reach. Drawn again only when an
-  // occluder changes (theme, parts, shutter, fog or canvas size), or once a minute while fog sways.
+  // occluder changes (theme, parts, shutter, fog or canvas size); never on a timer.
   scheduleMasks() {
     const svg = this.svg;
     const fog = svg.getAttribute("data-weather") === "fog";
     const occluders = ["ef-light", "ef-no-solar", "ef-no-b1", "ef-no-b2", "ef-garage-open"]
       .filter((c) => svg.classList.contains(c)).join(" ");
     const key = `${occluders}|${fog}|${this.width}`;
-    const fogMoves = fog && !svg.classList.contains("ef-low");
-    if (key === this.maskKey && (!fogMoves || performance.now() - this.maskAt < RESAMPLE)) return;
+    if (key === this.maskKey) return;
     this.maskKey = key;
     // One redraw waits or runs at a time and draws the picture as it is when it runs: readings coming in meanwhile
     // (Home Assistant sends one for every state change in the house) do not put it off; one during a run asks for
@@ -793,7 +804,6 @@ class PulseRenderer {
         this.uploadMask(level.id, source);
       }
     }
-    this.maskAt = performance.now();
     if (!this.ready) {
       this.ready = true;
       this.canvas.style.visibility = "inherit";
@@ -969,8 +979,6 @@ export class EnergyFlowView {
     this.gridTurns = 0;
     this.colorKeys = [];
     this.seen = true;
-    this.contrastBusy = false;
-    this.contrastDirty = false;
     this.densityCap = Infinity;
     this.level = "high";
     this.chosen = null;  // the level picked in the config or by the viewer on this device
@@ -1032,8 +1040,6 @@ export class EnergyFlowView {
     this.suspended = true;
     clearTimeout(this.reflectionTimer);
     this.lastSkyWeather = null;
-    clearTimeout(this.contrastTimer);
-    this.contrastTimer = 0;
     document.removeEventListener("visibilitychange", this.onVisibility);
     this.observer?.disconnect();
     removeEventListener(EFFECTS_KEY, this.onEffects);
@@ -1059,7 +1065,6 @@ export class EnergyFlowView {
 
   destroy() {
     clearTimeout(this.reflectionTimer);
-    clearTimeout(this.contrastTimer);
     clearTimeout(this.garageMoving);
     clearTimeout(this.relabel);
     clearTimeout(this.settle);
@@ -1149,10 +1154,8 @@ export class EnergyFlowView {
     else { this.configured = true; this.resample(); }
   }
 
-  // The snapshots of the picture (label contrast, the shimmer's still parts) again, after new names or colours.
+  // The shimmer's snapshot of the still parts again, after new names or colours.
   resample() {
-    this.contrastKey = null;
-    this.scheduleLabelContrast();
     this.shimmer?.invalidate();
     if (this.svg.classList.contains("ef-hot")) this.shimmer?.refresh();
   }
@@ -1194,7 +1197,7 @@ export class EnergyFlowView {
       }
       shift = Math.round(shift * 10) / 10;
       if (place.shift === shift) continue;
-      place.shift = el.shift = shift;
+      place.shift = shift;
       el.style.transform = shift ? `translateX(${shift}px)` : "";
     }
   }
@@ -1555,7 +1558,7 @@ export class EnergyFlowView {
     this.light("sun", sun, sunlight);
 
     const fraction = moon?.illuminated ?? 0;
-    const moonlightKey = () => moon ? `${Math.round(skyX(moon.progress) / 4)},${Math.round(moon.altitude)}` : "";
+    const moonlightKey = () => moon ? `${Math.round(skyX(moon.progress) / 8)},${Math.round(moon.altitude / 2)}` : "";
     const moonlight = moon ? visibility * (1 - smoothstep(-6, HORIZON, altitude)) * smoothstep(HORIZON, 2, moon.altitude) : 0;
     const moonBrightness = moonlight * Math.min(1, fraction * 45);
     this.light("moon", moon, moonBrightness);
@@ -1567,12 +1570,12 @@ export class EnergyFlowView {
     clearTimeout(this.reflectionTimer);
     if (this.level === "low" && this.skyKey !== undefined) this.reflectionTimer = setTimeout(reflect, 400);
     else reflect();
-    // Snapshots of the picture (heat shimmer, label contrast) are taken again once the sky looks different: the sun
-    // or moon a few units on, or the light a step brighter or darker. Coarse enough that a live card, whose sky
-    // creeps, re-takes them only every few minutes; a jump in time (the lab's slider) re-takes them at once.
-    const step = (v) => Math.round(v * 40);
+    // The shimmer's snapshot is taken again once the sky looks different: the sun or moon a few units on, or the
+    // light a step brighter or darker. Coarse enough that a live card, whose sky creeps, takes a new one about
+    // every five minutes at the most; a jump in time (the lab's slider) takes one at once.
+    const step = (v) => Math.round(v * 20);
     this.skyKey = [step(1 - smoothstep(-13, 10, altitude)), step(twilight * visibility), step(sunlight),
-      sun && sunlight ? `${Math.round(skyX(sun.progress) / 4)},${Math.round(altitude)}` : "",
+      sun && sunlight ? `${Math.round(skyX(sun.progress) / 8)},${Math.round(altitude / 2)}` : "",
       step(moonBrightness), moonBrightness ? moonlightKey() : ""].join(",");
     if (!moonBrightness) return;
 
@@ -1758,7 +1761,6 @@ export class EnergyFlowView {
       this.svg.getBoundingClientRect();  // lays the lanes out where they are before transitions are switched on
       this.svg.classList.remove("ef-still");
     }
-    this.scheduleLabelContrast();
     this.restAgain();
   }
 
@@ -1820,37 +1822,6 @@ export class EnergyFlowView {
     this.fadeExtras();
   }
 
-  // The list is one label: judged against the background behind all its visible text (each row where it sits now,
-  // weighted by its size), so every row gets the same ink, and a sun behind one row alone is not enough for a halo.
-  inkExtras() {
-    const backdrop = this.extrasBackdrop, rows = this.part("ef-extras").firstElementChild;
-    const picture = this.svg.getBoundingClientRect();
-    if (!backdrop || !picture.width) return;
-    const units = this.svg.viewBox.baseVal.width / picture.width, list = rows.getBoundingClientRect();
-    const range = document.createRange();
-    let light = 0, area = 0;
-    for (const row of rows.children) {
-      range.selectNodeContents(row);
-      const text = range.getBoundingClientRect();
-      const top = Math.max(text.top, list.top), bottom = Math.min(text.bottom, list.bottom);
-      if (bottom - top < 1 || !text.width) continue;
-      const luminance = this.lightBehind(backdrop.context, backdrop.scale, { x: (text.left - picture.left) * units,
-        y: (top - picture.top) * units, width: text.width * units, height: (bottom - top) * units });
-      if (luminance === null) continue;
-      light += luminance * text.width * (bottom - top);
-      area += text.width * (bottom - top);
-    }
-    if (!area) return;
-    // ink() keeps its hysteresis in the classes of the element it is given: one off the page for the list, copied to
-    // every row (the list's own box would get the labels' drop shadow as well).
-    const ink = this.extrasInk ??= document.createElement("span");
-    this.ink(ink, light / area);
-    for (const row of rows.children) {
-      row.classList.toggle("ef-ink-lifted", ink.classList.contains("ef-ink-lifted"));
-      row.classList.toggle("ef-ink-bright", ink.classList.contains("ef-ink-bright"));
-    }
-  }
-
   // The list is overflow:hidden (Safari draws nothing of a natively scrolling foreignObject), so wheel and touch move
   // it here. At an end the gesture goes on to the page; a touch settles on a whole row.
   scrollExtrasBy(rows) {
@@ -1879,7 +1850,6 @@ export class EnergyFlowView {
   }
 
   fadeExtras() {
-    this.inkExtras();
     const rows = this.part("ef-extras").firstElementChild;
     // The row cut by an edge with more beyond it fades (a mask did this, which Safari cannot draw in a foreignObject).
     // Measured on screen from the rows that are there: Safari loses a positioned list in a foreignObject (no offsetTop
@@ -1918,159 +1888,13 @@ export class EnergyFlowView {
     this.pulses?.sync();
     this.watchFrames();
     this.alignBeats();
-    this.scheduleLabelContrast();
     if (wasPaused && !this.paused) this.onVisible?.();
   }
 
-  canSampleContrast() {
-    return this.svg.isConnected && this.seen && !document.hidden && !this.paused;
-  }
-
-  // Labels stay readable on any sky: each one's background is sampled, and over a bright patch it gets a dark halo.
-  adaptLabel(label, context, scale) {
-    // where the label ends up: solar's and the grid's slide left when there is room (see the svg)
-    const box = label.getBBox(), has = (c) => this.svg.classList.contains(c);
-    if (label.closest("#ef-solar-label") && !has("ef-ev-on")) box.x -= 99;
-    if (label.closest("#ef-grid-label") && has("ef-no-b1")) box.x -= 135;
-    box.x += label.shift || 0;  // centred on its leader (alignLabels)
-    const luminance = this.lightBehind(context, scale, box);
-    if (luminance === null) return;
-    // In light mode a label turns white over a dark background, or where much of it sits over the panels.
-    if (this.svg.classList.contains("ef-light")) this.ink(label, luminance, this.darkShare(context, scale, box));
-    else this.ink(label, luminance);
-  }
-
-  // The mean luminance of the sampled background under a box in the picture's units, or null outside it.
-  lightBehind(context, scale, { x, y, width, height }) {
-    const left = Math.max(0, Math.floor(x * scale)), top = Math.max(0, Math.floor(y * scale));
-    const right = Math.min(context.canvas.width, Math.ceil((x + width) * scale));
-    const bottom = Math.min(context.canvas.height, Math.ceil((y + height) * scale));
-    if (right <= left || bottom <= top) return null;
-    const pixels = context.getImageData(left, top, right - left, bottom - top).data;
-    let light = 0;
-    for (let i = 0; i < pixels.length; i += 4) {
-      light += .2126 * linearLight(pixels[i]) + .7152 * linearLight(pixels[i + 1]) + .0722 * linearLight(pixels[i + 2]);
-    }
-    return light * 4 / pixels.length;
-  }
-
-  // The share of the sampled background under a box that is very dark (the panels, a dark roof), or 0 outside it.
-  darkShare(context, scale, { x, y, width, height }) {
-    const left = Math.max(0, Math.floor(x * scale)), top = Math.max(0, Math.floor(y * scale));
-    const right = Math.min(context.canvas.width, Math.ceil((x + width) * scale));
-    const bottom = Math.min(context.canvas.height, Math.ceil((y + height) * scale));
-    if (right <= left || bottom <= top) return 0;
-    const pixels = context.getImageData(left, top, right - left, bottom - top).data;
-    let dark = 0;
-    for (let i = 0; i < pixels.length; i += 4) {
-      const l = .2126 * linearLight(pixels[i]) + .7152 * linearLight(pixels[i + 1]) + .0722 * linearLight(pixels[i + 2]);
-      if (l < .08) dark++;  // the panels, sunlit or not
-    }
-    return dark * 4 / pixels.length;
-  }
-
-  // White ink over a dark background, brighter over a lighter one, and a dark halo over a bright one. In light mode
-  // the ink is dark, and white with a soft dark shadow over a dark patch (ef-ink-bright).
-  ink(label, luminance, share) {
-    if (this.svg.classList.contains("ef-light")) {
-      const on = label.classList.contains("ef-ink-bright");
-      // White ink (with a soft dark shadow) wherever it reads better than the dark ink: over the night sky, a grey
-      // roof under an idle value, or where much of the label sits over something very dark (the panels). The switch
-      // is where both inks have the same contrast with the background; each ink's luminance is fixed by its role.
-      const ink = label.classList.contains("ef-cap") ? .06 : label.querySelector?.(".ef-idle") || label.classList.contains("ef-idle") ? .11
-        : share === undefined ? .1 : .011;
-      const even = Math.sqrt(.95 * (ink + .05)) - .05;
-      const dark = luminance < even * (on ? 1.15 : 1) || share !== undefined && share > (on ? .1 : .15);
-      // Dark ink with only a corner over the panels keeps its ink and gets a soft white haze to lift it off them.
-      const hazed = label.classList.contains("ef-ink-haze");
-      label.classList.remove("ef-ink-lifted");
-      label.classList.toggle("ef-ink-bright", dark);
-      label.classList.toggle("ef-ink-haze", !dark && share !== undefined && share > (hazed ? .02 : .03));
-      return;
-    }
-    label.classList.remove("ef-ink-haze");
-    const threshold = label.classList.contains("ef-ink-lifted") ? .165 : .18;
-    const lifted = luminance > threshold;
-    label.classList.toggle("ef-ink-lifted", lifted);
-    label.classList.toggle("ef-ink-bright", !lifted && luminance > .075);
-  }
-
-  async sampleLabelContrast() {
-    // Rasterize the background locally at a small size, with the labels removed from the sample.
-    const svg = this.svg, key = this.stillKey();
-    const scene = svg.cloneNode(true);
-    scene.querySelector("#ef-labels").remove();
-    scene.classList.remove("ef-baked");  // the still parts the shimmer canvas draws are background too
-    // Strip heavy filters, noise patterns and pulse dashes: at 240 px wide they only slow down rasterization.
-    for (const el of scene.querySelectorAll("filter, .ef-flow, .ef-pulse, #ef-house-pulse, #ef-stucco-relief, #ef-render-grain, #ef-polished-grain")) el.remove();
-    for (const el of scene.querySelectorAll("[filter]")) el.removeAttribute("filter");
-    const noFx = document.createElementNS("http://www.w3.org/2000/svg", "style");
-    noFx.textContent = "*{filter:none!important;animation:none!important}";
-    scene.querySelector("defs")?.append(noFx);
-    const drift = scene.querySelector("#ef-drift");
-    drift.style.animation = "none";
-    drift.style.transform = getComputedStyle(this.part("ef-drift")).transform;
-    const view = svg.viewBox.baseVal, width = 240, scale = width / view.width;
-    const height = Math.round(view.height * scale);
-    scene.setAttribute("width", width);
-    scene.setAttribute("height", height);
-    this.canvas ??= document.createElement("canvas");
-    this.canvas.width = width;
-    this.canvas.height = height;
-    const context = this.canvas.getContext("2d", { willReadFrequently: true });
-    if (!context) return;
-    const url = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(scene)], { type: "image/svg+xml" }));
-    const image = new Image();
-    try {
-      image.src = url;
-      await image.decode();
-      if (!this.canSampleContrast() || key !== this.stillKey()) return;
-      context.drawImage(image, 0, 0);
-      for (const label of this.part("ef-labels").querySelectorAll("text")) {
-        if (label.getClientRects().length) this.adaptLabel(label, context, scale);
-      }
-      // Home's other loads move (they scroll and fold), so the background behind them is kept and each row is judged
-      // where it is now.
-      this.extrasBackdrop = this.part("ef-extras").getClientRects().length ? { context, scale } : null;
-      this.inkExtras();
-      this.contrastKey = key;
-      this.contrastAt = performance.now();
-    } finally {
-      URL.revokeObjectURL(url);
-      releaseImage(image);
-    }
-  }
-
-  // What the still parts of the picture look like: the look (weather, night, decorations) and the sky.
-  stillKey() { return `${lookKey(this.svg)}|${this.skyKey ?? ""}`; }
-
-  scheduleLabelContrast() {
-    if (!this.canSampleContrast()) return;
-    const key = this.stillKey();
-    const low = this.level === "low";
-    // Low mode holds the clouds and stars still. The backdrop changes when its key changes.
-    if (this.contrastKey === key && (low || performance.now() - this.contrastAt < RESAMPLE)) {
-      clearTimeout(this.contrastTimer);
-      this.contrastTimer = 0;
-      return;
-    }
-    if (this.contrastBusy) { this.contrastDirty = true; return; }
-    if (this.contrastTimer && (!low || this.pendingContrastKey === key)) return;
-    clearTimeout(this.contrastTimer);
-    this.pendingContrastKey = key;
-    this.contrastTimer = setTimeout(async () => {
-      this.contrastTimer = 0;
-      if (!this.canSampleContrast()) return;
-      this.contrastBusy = true;
-      this.contrastDirty = false;
-      try {
-        await this.sampleLabelContrast();
-      } catch {
-        // Keep the base label colours if the browser cannot rasterize the scene.
-      } finally {
-        this.contrastBusy = false;
-        if (this.contrastDirty) this.scheduleLabelContrast();
-      }
-    }, low ? 750 : 160);
+  // What the shimmer snapshot shows: the look of the still parts and the sky. What stays live over the snapshot
+  // (garage, shutter, lights, lanes) is left out, so a tap on the shutter or the window takes no new one.
+  shimmerLook() {
+    return [...this.svg.classList].filter((c) => !TRANSIENT.has(c) && !LIVE_OVER_SHIMMER.has(c)).join(" ")
+      + "|" + this.svg.getAttribute("data-weather") + "|" + this.svg.getAttribute("data-time");
   }
 }

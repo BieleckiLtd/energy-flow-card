@@ -7,12 +7,11 @@
 .ef-val{font:500 47px "SF Pro Display",-apple-system,system-ui,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;letter-spacing:.6px;fill:#f4f4f4}
 .ef-idle{fill:#a4a6aa}
 #ef-labels text,#ef-labels tspan{transition:fill .42s ease-in-out}
-.ef-ink-bright,.ef-ink-bright .ef-idle{fill:#f4f4f4}
-/* On a bright patch of sky the labels stay white and get a dark halo behind them. */
-.ef-ink-lifted,.ef-ink-lifted .ef-idle{fill:#f4f4f4}
-.ef-ink-lifted.ef-cap{fill:#e6e8eb}
-#ef-labels text{transition:fill .42s ease-in-out,filter .42s ease-in-out;filter:drop-shadow(0 0 0 rgb(0 0 0/0))}
-#ef-labels .ef-ink-lifted{filter:drop-shadow(0 2px 3px rgb(0 0 0/.55)) drop-shadow(0 0 14px rgb(0 0 0/.45))}
+/* One ink in each theme, whatever is behind it: light on the dark picture, dark on the light one (below). A shallow
+   shadow in the opposite tone, about half a point down and to the right and hardly blurred, adds the contrast where the
+   background comes close to the ink; it is not an outline and not a glow. Nothing measures the background.
+   Lengths are in the picture's units: 3 is about 1 pt at the card's usual width. */
+#ef-labels text{filter:drop-shadow(1.5px 1.5px .6px #000)}
 /* Home's other loads, above its label: a short list that scrolls. The row at an edge with more beyond it fades. Rows
    sit on the home label (the first one's auto margin), and a load that draws nothing folds away.
    Safari draws nothing of HTML in an SVG foreignObject that scrolls natively, has a mask or a filter (issue #5), so
@@ -27,13 +26,9 @@
   transition:height .5s cubic-bezier(.3,.7,.2,1) .1s,opacity .25s ease,transform .35s ease}
 #ef-labels,#ef-labels *{cursor:default;-webkit-user-select:none;user-select:none}
 .ef-extra-name{text-align:right;color:#8f939a}
-.ef-extra span{transition:color .42s ease-in-out,text-shadow .42s ease-in-out;text-shadow:0 0 0 rgb(0 0 0/0)}
+/* the labels' shallow shadow, scaled to the smaller rows */
+.ef-extra span{transition:color .42s ease-in-out;text-shadow:1.2px 1.2px .5px #000}
 .ef-extra-val{color:#e6e8eb;font-weight:500}
-/* Each row is judged against the sky behind it, like the other labels. */
-.ef-extra:is(.ef-ink-bright,.ef-ink-lifted) .ef-extra-name{color:#e6e8eb}
-.ef-extra:is(.ef-ink-bright,.ef-ink-lifted) .ef-extra-val{color:#f4f4f4}
-/* SOLAR's halo made lighter: the rows are smaller and stacked close, so their glows overlap and add up. */
-.ef-extra.ef-ink-lifted span{text-shadow:0 1px 2px rgb(0 0 0/.35),0 0 7px rgb(0 0 0/.16)}
 .ef-extra.ef-extra-edge .ef-extra-name{color:rgb(143 147 154/.3)}
 .ef-extra.ef-extra-edge .ef-extra-val{color:rgb(230 232 235/.3)}
 .ef-extra.ef-extra-edge span{text-shadow:none}
@@ -214,9 +209,10 @@
    going up, the first 22.5 % coming down; times and curves are those stretches of the shutter's own curve */
 #ef-shutter-shade{transition:transform .39s cubic-bezier(.35,0,.7,.2) .2s}
 .ef-garage-open #ef-shutter-shade{transform:translateY(-60px);transition:transform .66s cubic-bezier(.3,.85,.7,1) .74s}
-/* In the heat the still parts are a snapshot on the shimmer canvas, which jumps straight to the new state: while the
-   shutter moves, the garage and shutter are drawn live over it. */
-.ef-baked.ef-garage-moving :is(#ef-garage,#ef-shutter){visibility:visible}
+/* In the heat the still parts are a snapshot on the shimmer canvas. The garage, its shutter and the light the window
+   throws on the wall lie below where the air shimmers and are drawn live over it, so opening the garage or switching
+   the lights takes no new snapshot (view.js leaves them out of it: LIVE_PARTS). */
+.ef-baked :is(#ef-garage,#ef-shutter,.ef-open-jamb,.ef-window-wall-bounce){visibility:visible}
 /* the cable's pulses wait for the shutter to be all the way up */
 .ef-garage-moving #ef-ev-drop .ef-flow{display:none}
 /* The car's charging power, on a leader up from the wall box: the leader grows once the shutter is up, then the label
@@ -382,24 +378,18 @@
 .ef-light #ef-garage-slat stop:nth-child(1){stop-color:#d8dadd}
 .ef-light #ef-garage-slat stop:nth-child(2){stop-color:#c4c6c9}
 .ef-light #ef-garage-slat stop:nth-child(3){stop-color:#a9abaf}
-/* Labels: dark ink, day and night; over a dark patch (the panels, the night sky) white ink with a soft dark shadow */
+/* Labels: dark ink, day and night, over anything, with the same shallow shadow in white: lost on a light background,
+   it lifts the ink off a dark one (the panels, the night sky). */
 .ef-light .ef-cap{fill:#45484d}
 .ef-light .ef-val{fill:#1b1c1e}
 .ef-light .ef-idle{fill:#5b5e63}
-.ef-light .ef-ink-bright.ef-cap{fill:#e6e8eb}
-.ef-light .ef-ink-bright.ef-val,.ef-light .ef-ink-bright .ef-idle{fill:#f4f4f4}
-.ef-light #ef-labels .ef-ink-bright{filter:drop-shadow(0 0 6px rgb(10 14 28/.3)) drop-shadow(0 0 16px rgb(10 14 28/.22))}
-.ef-light #ef-labels .ef-ink-haze{filter:drop-shadow(0 0 5px rgb(255 255 255/.8)) drop-shadow(0 0 14px rgb(255 255 255/.5))}
-.ef-light .ef-ink-haze.ef-idle,.ef-light .ef-ink-haze .ef-idle{fill:#3e4146}
+.ef-light #ef-labels text{filter:drop-shadow(1.5px 1.5px .6px #fff)}
 .ef-light .ef-extra-name{color:#55595f}
 .ef-light .ef-extra-val{color:#1b1c1e}
-.ef-light .ef-extra.ef-ink-bright .ef-extra-name{color:#e6e8eb}
-.ef-light .ef-extra.ef-ink-bright .ef-extra-val{color:#f4f4f4}
-.ef-light .ef-extra.ef-ink-bright span{text-shadow:0 0 5px rgb(10 14 28/.3),0 0 12px rgb(10 14 28/.22)}
+.ef-light .ef-extra span{text-shadow:1.2px 1.2px .5px #fff}
 .ef-light .ef-extra.ef-extra-edge .ef-extra-name{color:rgb(85 89 95/.3)}
 .ef-light .ef-extra.ef-extra-edge .ef-extra-val{color:rgb(27 28 30/.3)}
-.ef-light .ef-extra.ef-ink-bright.ef-extra-edge .ef-extra-name{color:rgb(230 232 235/.3)}
-.ef-light .ef-extra.ef-ink-bright.ef-extra-edge .ef-extra-val{color:rgb(244 244 244/.3)}
+.ef-light .ef-extra.ef-extra-edge span{text-shadow:none}
 .ef-light .ef-lead{stroke:#3a3d42;stroke-opacity:.5}
 /* the leaders that run down over the panels and the roof are white, day and night */
 .ef-light :is(#ef-solar-lead,#ef-home-lead,#ef-ev-lead){stroke:#fff;stroke-opacity:.82}
@@ -674,8 +664,6 @@
 .ef.ef-low :is([filter="url(#ef-floor-soft)"],[filter="url(#ef-cast-shadow)"],[filter="url(#ef-eave-penumbra)"],[filter="url(#ef-wall-shadow)"],[filter="url(#ef-ao-blur)"],[filter="url(#ef-rim-shadow)"],[filter="url(#ef-car-fall-blur)"],[filter="url(#ef-car-shade-blur)"],[filter="url(#ef-pane-inner-shade)"]){display:none}
 .ef.ef-low :is([filter="url(#ef-contact-shadow)"],[filter="url(#ef-array-shadow)"],[filter="url(#ef-car-touch)"],[filter="url(#ef-optical-blur)"],[filter="url(#ef-xmas-frost)"]){filter:none}
 .ef.ef-low :is(#ef-b1-battery,#ef-b2-battery,#ef-ev-charger,#ef-car [stroke="#d3262f"]){filter:none}
-.ef.ef-low #ef-labels :is(text,.ef-ink-haze){filter:none;transition:fill .42s ease-in-out}
-.ef.ef-low #ef-labels :is(.ef-ink-lifted,.ef-ink-bright){filter:drop-shadow(0 1px 3px rgb(0 0 0/.55));transition:fill .42s ease-in-out}
 /* On low detail, hold rain streaks and snowflakes at their staggered mid-air positions instead of repainting the whole
    SVG at 60 fps on every frame. */
 .ef.ef-low #ef-rain .ef-streaks path,.ef.ef-low #ef-snow circle{animation-play-state:paused}
