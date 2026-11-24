@@ -1,6 +1,6 @@
 {
   "name": "energy-flow-card",
-  "version": "0.9.5",
+  "version": "0.9.6",
   "description": "An animated house for Home Assistant: solar, batteries, grid and home power under the real sky and weather.",
   "type": "module",
   "license": "MIT",
